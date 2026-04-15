@@ -127,7 +127,7 @@ function Step1Auth({ onSuccess }: Step1Props) {
     setError(null)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/inscription?step=2` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/inscription?step=2')}` },
     })
     if (error) {
       setError(error.message)

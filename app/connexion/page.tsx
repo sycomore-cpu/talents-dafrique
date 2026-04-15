@@ -66,9 +66,14 @@ export default function ConnexionPage() {
   const handleGoogle = async () => {
     setLoadingGoogle(true)
     setError(null)
+    // Récupère le paramètre ?redirect= pour renvoyer l'utilisateur après connexion
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('redirect') ?? '/dashboard'
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
     })
     if (error) {
       setError(error.message)
@@ -104,7 +109,9 @@ export default function ConnexionPage() {
       setError(error.message)
     } else {
       setSuccess(true)
-      setTimeout(() => router.push('/'), 1500)
+      const params = new URLSearchParams(window.location.search)
+      const next = params.get('redirect') ?? '/dashboard'
+      setTimeout(() => router.push(next), 1500)
     }
     setLoadingOtp(false)
   }
