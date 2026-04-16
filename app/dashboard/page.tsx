@@ -27,129 +27,6 @@ import {
 import { usePhotoUpload } from '@/lib/usePhotoUpload'
 import { createClient } from '@/lib/supabase/client'
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const MOCK_RESERVATIONS_CLIENT = [
-  {
-    id: 'r1',
-    talentName: 'Aminata Diallo',
-    talentAvatar: null,
-    service: 'Coiffure (braids, locks, perruques)',
-    date: '2026-04-18',
-    time: '14:00',
-    status: 'accepted' as ReservationStatus,
-    whatsapp: '33612345678',
-    hasReview: false,
-  },
-  {
-    id: 'r2',
-    talentName: 'Fatou Kouyaté',
-    talentAvatar: null,
-    service: 'Tresses africaines',
-    date: '2026-03-25',
-    time: '10:00',
-    status: 'completed' as ReservationStatus,
-    whatsapp: '33698765432',
-    hasReview: true,
-  },
-  {
-    id: 'r3',
-    talentName: 'Ibrahima Sow',
-    talentAvatar: null,
-    service: 'Montage de meubles (IKEA, etc.)',
-    date: '2026-04-20',
-    time: '09:00',
-    status: 'pending' as ReservationStatus,
-    whatsapp: '33655443322',
-    hasReview: false,
-  },
-  {
-    id: 'r4',
-    talentName: 'Mariama Bah',
-    talentAvatar: null,
-    service: 'Chef à domicile',
-    date: '2026-04-05',
-    time: '12:00',
-    status: 'refused' as ReservationStatus,
-    whatsapp: '33677889900',
-    hasReview: false,
-  },
-]
-
-const MOCK_RESERVATIONS_TALENT = [
-  {
-    id: 't1',
-    clientName: 'Jean-Claude Mbemba',
-    clientAvatar: null,
-    service: 'Coiffure (braids, locks, perruques)',
-    date: '2026-04-18',
-    time: '14:00',
-    status: 'accepted' as ReservationStatus,
-    whatsapp: '33611223344',
-    hasReview: false,
-  },
-  {
-    id: 't2',
-    clientName: 'Sophie Nguyen',
-    clientAvatar: null,
-    service: 'Onglerie (gel, résine, nail art)',
-    date: '2026-04-22',
-    time: '16:00',
-    status: 'pending' as ReservationStatus,
-    whatsapp: '33644556677',
-    hasReview: false,
-  },
-  {
-    id: 't3',
-    clientName: 'Moussa Camara',
-    clientAvatar: null,
-    service: 'Coiffure (braids, locks, perruques)',
-    date: '2026-03-30',
-    time: '11:00',
-    status: 'completed' as ReservationStatus,
-    whatsapp: '33688990011',
-    hasReview: false,
-  },
-]
-
-const MOCK_TRANSACTIONS = [
-  {
-    id: 'tx1',
-    date: '2026-04-10',
-    reason: 'Bienvenue sur Talents d\'Afrique',
-    amount: +10,
-    balance: 10,
-  },
-  {
-    id: 'tx2',
-    date: '2026-04-11',
-    reason: 'Parrainage de Kofi Asante',
-    amount: +3,
-    balance: 13,
-  },
-  {
-    id: 'tx3',
-    date: '2026-04-12',
-    reason: 'Acceptation demande de Jean-Claude Mbemba',
-    amount: -1,
-    balance: 12,
-  },
-  {
-    id: 'tx4',
-    date: '2026-04-14',
-    reason: 'Acceptation demande de Sophie Nguyen',
-    amount: -1,
-    balance: 11,
-  },
-  {
-    id: 'tx5',
-    date: '2026-04-18',
-    reason: 'Parrainage de Fatima Traoré',
-    amount: +3,
-    balance: 14,
-  },
-]
-
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: ReservationStatus }) {
@@ -940,9 +817,19 @@ export default function DashboardPage() {
     )
   }
 
-  if (!user || !profile) {
+  // Pas d'utilisateur → connexion
+  if (!user) {
     router.replace('/connexion')
     return null
+  }
+
+  // Utilisateur connecté mais profil encore en chargement → petit spinner
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full" />
+      </div>
+    )
   }
 
   const tabs: { key: Tab; label: string }[] = [

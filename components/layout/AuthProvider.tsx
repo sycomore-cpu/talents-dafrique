@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextValue>({
   refreshProfile: async () => {},
 })
 
-async function loadOrCreateProfile(
+async function fetchOrCreateProfile(
   userId: string,
   userMeta: Record<string, unknown>
 ): Promise<Profile | null> {
@@ -37,20 +37,18 @@ async function loadOrCreateProfile(
 
     if (data) return data as Profile
 
-    // Profil manquant (trigger cassé lors d'une inscription précédente)
+    // Profil absent (trigger manqué) → on le crée
     if (error?.code === 'PGRST116') {
       const code = Math.random().toString(36).slice(2, 10).toUpperCase()
       const name =
         (userMeta?.full_name as string) ??
         (userMeta?.email as string) ??
         'Nouveau membre'
-
       const { data: created } = await supabase
         .from('profiles')
         .insert({ id: userId, name, parrain_code: code, kory_balance: 10 })
         .select()
         .single()
-
       if (created) {
         await supabase.from('kory_transactions').insert({
           user_id: userId,
@@ -60,10 +58,8 @@ async function loadOrCreateProfile(
       }
       return (created as Profile) ?? null
     }
-
     return null
   } catch {
-    // Ne jamais bloquer le chargement pour une erreur de profil
     return null
   }
 }
@@ -76,58 +72,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    // ── Timeout de sécurité : 6s max, après ça on débloque quoi qu'il arrive ──
-    const failsafe = setTimeout(() => {
-      if (!cancelled) {
-        console.warn('[Auth] Timeout de chargement — débloqué après 6s')
-        setLoading(false)
-      }
-    }, 6000)
-
-    function done() {
-      if (!cancelled) {
-        setLoading(false)
-        clearTimeout(failsafe)
-      }
-    }
-
-    // ── Vérification initiale de session ──────────────────────────────────────
+    // ── IMPORTANT : on résout loading dès qu'on connaît l'état auth,
+    //   sans attendre le profil — le profil charge en parallèle.
     supabase.auth
       .getSession()
-      .then(async ({ data: { session } }) => {
+      .then(({ data: { session } }) => {
         if (cancelled) return
         const u = session?.user ?? null
         setUser(u)
+        setLoading(false) // ← débloque tout de suite
         if (u) {
-          const p = await loadOrCreateProfile(u.id, u.user_metadata ?? {})
-          if (!cancelled) setProfile(p)
+          fetchOrCreateProfile(u.id, u.user_metadata ?? {}).then(p => {
+            if (!cancelled) setProfile(p)
+          })
         }
-        done()
       })
-      .catch(() => done())
+      .catch(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-    // ── Changements d'état (connexion / déconnexion / refresh token) ──────────
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return
-      const u = session?.user ?? null
-      setUser(u)
-      if (u) {
-        const p = await loadOrCreateProfile(u.id, u.user_metadata ?? {})
-        if (!cancelled) setProfile(p)
-      } else {
-        setProfile(null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (cancelled) return
+        const u = session?.user ?? null
+        setUser(u)
+        setLoading(false) // ← débloque aussi ici
+        if (u) {
+          fetchOrCreateProfile(u.id, u.user_metadata ?? {}).then(p => {
+            if (!cancelled) setProfile(p)
+          })
+        } else {
+          setProfile(null)
+        }
       }
-      done()
-    })
+    )
 
     return () => {
       cancelled = true
-      clearTimeout(failsafe)
       subscription.unsubscribe()
     }
-  }, []) // s'exécute une seule fois au montage
+  }, [])
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -137,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshProfile() {
     if (!user) return
-    const p = await loadOrCreateProfile(user.id, user.user_metadata ?? {})
+    const p = await fetchOrCreateProfile(user.id, user.user_metadata ?? {})
     setProfile(p)
   }
 

@@ -799,10 +799,26 @@ function InscriptionInner() {
           amount: 3,
           reason: `Parrainage de ${profileData?.name ?? 'un nouveau membre'}`,
         })
-        await supabase
-          .from('profiles')
-          .update({ kory_balance: supabase.rpc('increment_kory', { uid: parrainProfile.id, delta: 3 }) })
-          .eq('id', parrainProfile.id)
+        // Incrémenter le solde Kory du parrain via SQL atomique
+        await supabase.rpc('add_kory', {
+          target_user_id: parrainProfile.id,
+          delta: 3,
+        }).then(async ({ error }) => {
+          if (error) {
+            // Fallback si la RPC n'existe pas : fetch + update manuel
+            const { data: pp } = await supabase
+              .from('profiles')
+              .select('kory_balance')
+              .eq('id', parrainProfile.id)
+              .single()
+            if (pp) {
+              await supabase
+                .from('profiles')
+                .update({ kory_balance: (pp.kory_balance ?? 0) + 3 })
+                .eq('id', parrainProfile.id)
+            }
+          }
+        })
       }
     }
 

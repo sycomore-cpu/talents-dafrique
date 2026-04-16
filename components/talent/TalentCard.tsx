@@ -46,7 +46,11 @@ function ArrowRightIcon() {
 export function TalentCard({ talent, className }: TalentCardProps) {
   const caseData = talent.case_slug ? getCaseBySlug(talent.case_slug) : null
   const talentSlug = getTalentSlug(talent)
-  const profileHref = caseData
+  // Les IDs mock (ex: "mock-beaute-1") n'ont pas de vraie page — on désactive
+  const isMock = talent.id.startsWith('mock-')
+  const profileHref = isMock
+    ? null
+    : caseData
     ? `/cases/${caseData.slug}/${talentSlug}`
     : `/talent/${talentSlug}`
 
@@ -73,29 +77,42 @@ export function TalentCard({ talent, className }: TalentCardProps) {
       {/* Card header */}
       <div className="flex items-start gap-3 p-4 pb-3">
         {/* Avatar */}
-        <Link
-          href={profileHref}
-          className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-full"
-          tabIndex={-1}
-          aria-hidden="true"
-        >
+        {profileHref ? (
+          <Link
+            href={profileHref}
+            className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-full"
+            tabIndex={-1}
+            aria-hidden="true"
+          >
+            <Avatar
+              src={talent.avatar_url}
+              name={talent.name}
+              size="lg"
+              ring={talent.status === 'parraine' ? 'kory' : 'none'}
+            />
+          </Link>
+        ) : (
           <Avatar
             src={talent.avatar_url}
             name={talent.name}
             size="lg"
             ring={talent.status === 'parraine' ? 'kory' : 'none'}
           />
-        </Link>
+        )}
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <Link
-              href={profileHref}
-              className="font-semibold text-brown hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded truncate"
-            >
-              {talent.name}
-            </Link>
+            {profileHref ? (
+              <Link
+                href={profileHref}
+                className="font-semibold text-brown hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded truncate"
+              >
+                {talent.name}
+              </Link>
+            ) : (
+              <span className="font-semibold text-brown truncate">{talent.name}</span>
+            )}
             <Badge
               variant={
                 talent.status === 'parraine'
@@ -187,14 +204,21 @@ export function TalentCard({ talent, className }: TalentCardProps) {
 
       {/* Footer CTA */}
       <div className="mt-auto px-4 py-3 flex justify-end">
-        <Link
-          href={profileHref}
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded"
-          aria-label={`Voir le profil de ${talent.name}`}
-        >
-          Voir le profil
-          <ArrowRightIcon />
-        </Link>
+        {profileHref ? (
+          <Link
+            href={profileHref}
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded"
+            aria-label={`Voir le profil de ${talent.name}`}
+          >
+            Voir le profil
+            <ArrowRightIcon />
+          </Link>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-brown/30 cursor-not-allowed">
+            Voir le profil
+            <ArrowRightIcon />
+          </span>
+        )}
       </div>
     </article>
   )
