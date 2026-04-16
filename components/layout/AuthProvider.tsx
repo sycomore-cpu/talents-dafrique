@@ -24,36 +24,48 @@ const AuthContext = createContext<AuthContextValue>({
   refreshProfile: async () => {},
 })
 
-async function loadOrCreateProfile(userId: string, userMeta: Record<string, unknown>): Promise<Profile | null> {
-  // Tenter de charger le profil existant
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-
-  if (data) return data as Profile
-
-  // Aucun profil → le créer (trigger manqué lors d'une inscription précédente)
-  if (error?.code === 'PGRST116') {
-    const code = Math.random().toString(36).slice(2, 10).toUpperCase()
-    const name = (userMeta?.full_name as string) ?? (userMeta?.email as string) ?? 'Nouveau membre'
-    const { data: created } = await supabase
+async function loadOrCreateProfile(
+  userId: string,
+  userMeta: Record<string, unknown>
+): Promise<Profile | null> {
+  try {
+    const { data, error } = await supabase
       .from('profiles')
-      .insert({ id: userId, name, parrain_code: code, kory_balance: 10 })
-      .select()
+      .select('*')
+      .eq('id', userId)
       .single()
 
-    if (created) {
-      // Bonus de bienvenue
-      await supabase
-        .from('kory_transactions')
-        .insert({ user_id: userId, amount: 10, reason: "Bienvenue sur Talents d'Afrique !" })
-    }
-    return (created as Profile) ?? null
-  }
+    if (data) return data as Profile
 
-  return null
+    // Profil manquant (trigger cassé lors d'une inscription précédente)
+    if (error?.code === 'PGRST116') {
+      const code = Math.random().toString(36).slice(2, 10).toUpperCase()
+      const name =
+        (userMeta?.full_name as string) ??
+        (userMeta?.email as string) ??
+        'Nouveau membre'
+
+      const { data: created } = await supabase
+        .from('profiles')
+        .insert({ id: userId, name, parrain_code: code, kory_balance: 10 })
+        .select()
+        .single()
+
+      if (created) {
+        await supabase.from('kory_transactions').insert({
+          user_id: userId,
+          amount: 10,
+          reason: "Bienvenue sur Talents d'Afrique !",
+        })
+      }
+      return (created as Profile) ?? null
+    }
+
+    return null
+  } catch {
+    // Ne jamais bloquer le chargement pour une erreur de profil
+    return null
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -64,20 +76,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    // Vérification initiale de session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancelled) return
-      const u = session?.user ?? null
-      setUser(u)
-      if (u) {
-        const p = await loadOrCreateProfile(u.id, u.user_metadata ?? {})
-        if (!cancelled) setProfile(p)
+    // ── Timeout de sécurité : 6s max, après ça on débloque quoi qu'il arrive ──
+    const failsafe = setTimeout(() => {
+      if (!cancelled) {
+        console.warn('[Auth] Timeout de chargement — débloqué après 6s')
+        setLoading(false)
       }
-      if (!cancelled) setLoading(false)
-    })
+    }, 6000)
 
-    // Changements d'état auth (connexion / déconnexion / refresh token)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    function done() {
+      if (!cancelled) {
+        setLoading(false)
+        clearTimeout(failsafe)
+      }
+    }
+
+    // ── Vérification initiale de session ──────────────────────────────────────
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        if (cancelled) return
+        const u = session?.user ?? null
+        setUser(u)
+        if (u) {
+          const p = await loadOrCreateProfile(u.id, u.user_metadata ?? {})
+          if (!cancelled) setProfile(p)
+        }
+        done()
+      })
+      .catch(() => done())
+
+    // ── Changements d'état (connexion / déconnexion / refresh token) ──────────
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return
       const u = session?.user ?? null
       setUser(u)
@@ -87,14 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null)
       }
-      if (!cancelled) setLoading(false)
+      done()
     })
 
     return () => {
       cancelled = true
+      clearTimeout(failsafe)
       subscription.unsubscribe()
     }
-  }, []) // ← s'exécute une seule fois au montage
+  }, []) // s'exécute une seule fois au montage
 
   async function signOut() {
     await supabase.auth.signOut()
