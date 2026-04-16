@@ -28,25 +28,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   }
 
-  // ── Récupérer le profil pour connaître le nb de photos actuelles ─────────────
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('photos')
-    .eq('id', user.id)
-    .single()
-
-  const currentPhotos: string[] = profile?.photos ?? []
-
-  if (currentPhotos.length >= MAX_PHOTOS) {
-    return NextResponse.json(
-      { error: `Maximum ${MAX_PHOTOS} photos autorisées.` },
-      { status: 400 }
-    )
-  }
-
-  // ── Lire le fichier ──────────────────────────────────────────────────────────
+  // ── Lire le fichier + type ───────────────────────────────────────────────────
   const formData = await request.formData()
   const file = formData.get('file') as File | null
+  const uploadType = (formData.get('type') as string | null) ?? 'photo' // 'photo' | 'avatar'
+
+  // ── Vérifier la limite photos (sauf pour avatar) ─────────────────────────────
+  let currentPhotos: string[] = []
+  if (uploadType === 'photo') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('photos')
+      .eq('id', user.id)
+      .single()
+    currentPhotos = profile?.photos ?? []
+    if (currentPhotos.length >= MAX_PHOTOS) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_PHOTOS} photos autorisées.` },
+        { status: 400 }
+      )
+    }
+  }
 
   if (!file) {
     return NextResponse.json({ error: 'Aucun fichier fourni.' }, { status: 400 })
@@ -115,10 +117,16 @@ export async function POST(request: NextRequest) {
   const { secure_url } = await uploadRes.json() as { secure_url: string }
 
   // ── Mettre à jour le profil Supabase ─────────────────────────────────────────
-  const newPhotos = [...currentPhotos, secure_url]
+  let updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (uploadType === 'avatar') {
+    updatePayload.avatar_url = secure_url
+  } else {
+    updatePayload.photos = [...currentPhotos, secure_url]
+  }
+
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ photos: newPhotos, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('id', user.id)
 
   if (updateError) {
@@ -129,7 +137,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ url: secure_url, photos: newPhotos })
+  return NextResponse.json({
+    url: secure_url,
+    ...(uploadType === 'avatar' ? { avatar_url: secure_url } : { photos: updatePayload.photos }),
+  })
 }
 
 export async function DELETE(request: NextRequest) {

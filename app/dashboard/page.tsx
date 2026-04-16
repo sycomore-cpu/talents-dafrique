@@ -476,6 +476,7 @@ function ReservationsTab({ userId }: { userId: string }) {
 
 function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAuth>['profile']> }) {
   const supabase = createClient()
+  const { refreshProfile } = useAuth()
   const [name, setName] = useState(profile.name)
   const [city, setCity] = useState(profile.city)
   const [phone, setPhone] = useState(profile.phone ?? '')
@@ -485,11 +486,17 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<string[]>(profile.photos ?? [])
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  // Talent section state
+  const [caseSlug, setCaseSlug] = useState(profile.case_slug ?? '')
+  const [subServices, setSubServices] = useState<string[]>(profile.sub_services ?? [])
+  const [availability, setAvailability] = useState<Record<string, { start: string; end: string }>>(
+    (profile.availability as Record<string, { start: string; end: string }>) ?? {}
+  )
 
   const { upload, remove, uploading, error: uploadError, canAdd, maxPhotos, maxSizeMb } =
     usePhotoUpload(photos, setPhotos)
-
-  const caseData = profile.case_slug ? getCaseBySlug(profile.case_slug) : null
 
   function copyCode() {
     navigator.clipboard.writeText(profile.parrain_code)
@@ -497,17 +504,41 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
     setTimeout(() => setCopied(false), 2000)
   }
 
+  async function handleAvatarUpload(file: File) {
+    setAvatarUploading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('type', 'avatar')
+    const res = await fetch('/api/upload', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.avatar_url) {
+      setAvatarUrl(data.avatar_url)
+      await refreshProfile()
+    }
+    setAvatarUploading(false)
+  }
+
   async function handleSave() {
     setSaving(true)
     setSaveError(null)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ name, city, phone: phone || null, bio: bio || null })
-      .eq('id', profile.id)
+    const update: Record<string, unknown> = {
+      name,
+      city,
+      phone: phone || null,
+      bio: bio || null,
+    }
+    // Sauvegarder aussi les infos talent si applicable
+    if (profile.is_talent) {
+      update.case_slug = caseSlug || null
+      update.sub_services = subServices
+      update.availability = availability
+    }
+    const { error } = await supabase.from('profiles').update(update).eq('id', profile.id)
     setSaving(false)
     if (error) {
       setSaveError(error.message)
     } else {
+      await refreshProfile()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     }
@@ -520,10 +551,20 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
         <h3 className="font-semibold text-brown mb-4">Informations personnelles</h3>
         <div className="flex items-center gap-4 mb-5">
           <div className="relative">
-            <Avatar src={profile.avatar_url} name={profile.name} size="xl" />
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors shadow-sm">
-              <Camera className="w-3.5 h-3.5" />
-            </button>
+            <Avatar src={avatarUrl} name={profile.name} size="xl" />
+            <label className={`absolute -bottom-1 -right-1 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors shadow-sm cursor-pointer ${avatarUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+              {avatarUploading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = '' }}
+              />
+            </label>
           </div>
           <div>
             <p className="font-medium text-brown">{profile.name}</p>
@@ -643,47 +684,62 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
         <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
           <h3 className="font-semibold text-brown mb-4">Mon espace talent</h3>
 
-          {caseData && (
-            <div className="mb-4">
-              <p className="text-sm font-medium text-brown mb-2">Ma Case</p>
-              <div
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${caseData.color} text-sm font-medium`}
-              >
-                <span>{caseData.icon}</span>
-                {caseData.label}
-              </div>
-            </div>
-          )}
-
+          {/* Case selector */}
           <div className="mb-4">
-            <p className="text-sm font-medium text-brown mb-2">Mes services</p>
-            <div className="flex flex-wrap gap-2">
-              {(caseData?.services ?? []).map((svc) => {
-                const isSelected = profile.sub_services.includes(svc)
-                return (
+            <Select
+              label="Ma Case"
+              value={caseSlug}
+              onChange={(e) => { setCaseSlug(e.target.value); setSubServices([]) }}
+              options={CASES.map((c) => ({ value: c.slug, label: `${c.icon} ${c.label}` }))}
+              placeholder="Choisir ma catégorie"
+            />
+          </div>
+
+          {/* Sub-services */}
+          {caseSlug && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-brown mb-2">Mes services</p>
+              <div className="flex flex-wrap gap-2">
+                {(CASES.find((c) => c.slug === caseSlug)?.services ?? []).map((svc) => (
                   <button
                     key={svc}
+                    type="button"
+                    onClick={() =>
+                      setSubServices((prev) =>
+                        prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
+                      )
+                    }
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      isSelected
+                      subServices.includes(svc)
                         ? 'bg-primary text-white border-primary'
                         : 'bg-white text-brown/60 border-brown/20 hover:border-primary/50'
                     }`}
                   >
                     {svc}
                   </button>
-                )
-              })}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
+          {/* Availability */}
           <div>
             <p className="text-sm font-medium text-brown mb-2">Disponibilités</p>
             <div className="flex flex-wrap gap-2">
               {AVAILABILITY_DAYS.map((day) => {
-                const isAvail = day in profile.availability
+                const isAvail = day in availability
                 return (
                   <button
                     key={day}
+                    type="button"
+                    onClick={() =>
+                      setAvailability((prev) => {
+                        const next = { ...prev }
+                        if (isAvail) { delete next[day] }
+                        else { next[day] = { start: '09:00', end: '18:00' } }
+                        return next
+                      })
+                    }
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                       isAvail
                         ? 'bg-secondary text-white border-secondary'
