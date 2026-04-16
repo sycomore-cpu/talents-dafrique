@@ -381,8 +381,8 @@ function ReservationsTab({ userId }: { userId: string }) {
           .eq('talent_id', userId)
           .order('created_at', { ascending: false }),
       ])
-      setClientReservations((clientRes.data ?? []) as ReservationRow[])
-      setTalentReservations((talentRes.data ?? []) as ReservationRow[])
+      setClientReservations((clientRes.data ?? []) as unknown as ReservationRow[])
+      setTalentReservations((talentRes.data ?? []) as unknown as ReservationRow[])
       setLoadingRes(false)
     }
     load()

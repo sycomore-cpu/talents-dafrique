@@ -1236,7 +1236,7 @@ export default async function CasePage({
   // Fall back to mock data if no real talents yet
   const talents: Profile[] =
     talentsData && talentsData.length > 0
-      ? (talentsData as Profile[])
+      ? (talentsData as unknown as Profile[])
       : (mockTalentsByCase[caseSlug] ?? mockTalentsByCase.beaute)
 
   return (
