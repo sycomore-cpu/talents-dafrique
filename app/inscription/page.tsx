@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useCallback, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/components/layout/AuthProvider'
 import { CASES, VILLES, AVAILABILITY_DAYS, KORY_WELCOME } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea, Select } from '@/components/ui/Input'
@@ -461,12 +462,16 @@ function Step3Talent({ profileData, onFinish, isLoading }: Step3Props) {
     }))
   }
 
-  // Mock parrain code validation
-  const checkParrainCode = useCallback((code: string) => {
-    if (!code) { setParrainValid(null); return }
-    // Simulated: codes matching pattern XXXXX000 are "valid"
-    const isValid = /^[A-Z]{3,8}\d{3}$/.test(code.toUpperCase())
-    setParrainValid(isValid)
+  // Real parrain code validation via Supabase
+  const checkParrainCode = useCallback(async (code: string) => {
+    if (!code || code.length < 8) { setParrainValid(null); return }
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('parrain_code', code.toUpperCase())
+      .single()
+    setParrainValid(!!data)
   }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -714,16 +719,35 @@ function SuccessScreen({ isTalent }: { isTalent: boolean }) {
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main page (inner) ────────────────────────────────────────────────────────
 
-export default function InscriptionPage() {
+function InscriptionInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, loading: authLoading } = useAuth()
+  const supabase = createClient()
+
   const [step, setStep] = useState(1)
   const [email, setEmail] = useState('')
   const [profileData, setProfileData] = useState<ProfileData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [wasTalent, setWasTalent] = useState(false)
+
+  // Lire le paramètre ?step= et avancer si déjà connecté
+  useEffect(() => {
+    if (authLoading) return
+    const urlStep = parseInt(searchParams.get('step') ?? '1')
+    if (user) {
+      if (urlStep >= 2) {
+        setEmail(user.email ?? '')
+        setStep(2)
+      } else {
+        // Déjà connecté sans step=2 → dashboard
+        router.replace('/dashboard')
+      }
+    }
+  }, [user, authLoading, searchParams, router])
 
   const handleStep1Success = (authEmail: string) => {
     setEmail(authEmail)
@@ -736,12 +760,65 @@ export default function InscriptionPage() {
   }
 
   const handleStep3Finish = async (talentData: TalentData) => {
+    if (!user) return
     setIsLoading(true)
-    // In production: upsert profile + talent data to Supabase here
-    await new Promise((r) => setTimeout(r, 1000)) // Simulate save
+
+    // Construire la mise à jour du profil
+    const profileUpdate: Record<string, unknown> = {
+      name: profileData?.name,
+      city: profileData?.city,
+      phone: profileData?.phone || null,
+      bio: profileData?.bio || null,
+      is_talent: talentData.isTalent,
+    }
+
+    if (talentData.isTalent && talentData.caseSlug) {
+      profileUpdate.case_slug = talentData.caseSlug
+      profileUpdate.sub_services = talentData.subServices
+      // Convertir les disponibilités en format DB (seulement les jours activés)
+      const avail: Record<string, { start: string; end: string }> = {}
+      Object.entries(talentData.availability).forEach(([day, slot]) => {
+        if (slot.enabled) avail[day] = { start: slot.start, end: slot.end }
+      })
+      profileUpdate.availability = avail
+    }
+
+    // Valider et appliquer le code parrain
+    if (talentData.parrainCode) {
+      const { data: parrainProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('parrain_code', talentData.parrainCode.toUpperCase())
+        .single()
+      if (parrainProfile) {
+        profileUpdate.parrain_id = parrainProfile.id
+        profileUpdate.status = 'parraine'
+        // Créditer le parrain (+3 Korys)
+        await supabase.from('kory_transactions').insert({
+          user_id: parrainProfile.id,
+          amount: 3,
+          reason: `Parrainage de ${profileData?.name ?? 'un nouveau membre'}`,
+        })
+        await supabase
+          .from('profiles')
+          .update({ kory_balance: supabase.rpc('increment_kory', { uid: parrainProfile.id, delta: 3 }) })
+          .eq('id', parrainProfile.id)
+      }
+    }
+
+    await supabase.from('profiles').update(profileUpdate).eq('id', user.id)
+
     setWasTalent(talentData.isTalent)
     setIsLoading(false)
     setDone(true)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -783,5 +860,19 @@ export default function InscriptionPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Export with Suspense (required for useSearchParams) ──────────────────────
+
+export default function InscriptionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <InscriptionInner />
+    </Suspense>
   )
 }
