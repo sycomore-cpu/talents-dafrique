@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/components/layout/AuthProvider'
@@ -25,6 +25,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { usePhotoUpload } from '@/lib/usePhotoUpload'
+import { createClient } from '@/lib/supabase/client'
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
@@ -347,9 +348,52 @@ function ReviewModal({
 
 // ─── Reservations Tab ─────────────────────────────────────────────────────────
 
-function ReservationsTab() {
+type ReservationRow = {
+  id: string
+  service: string
+  requested_date: string
+  requested_time: string
+  status: ReservationStatus
+  contact_revealed: boolean
+  talent?: { name: string; avatar_url: string | null; whatsapp: string | null }
+  client?: { name: string; avatar_url: string | null }
+}
+
+function ReservationsTab({ userId }: { userId: string }) {
+  const supabase = createClient()
   const [subTab, setSubTab] = useState<'client' | 'talent'>('client')
   const [reviewTarget, setReviewTarget] = useState<string | null>(null)
+  const [clientReservations, setClientReservations] = useState<ReservationRow[]>([])
+  const [talentReservations, setTalentReservations] = useState<ReservationRow[]>([])
+  const [loadingRes, setLoadingRes] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [clientRes, talentRes] = await Promise.all([
+        supabase
+          .from('reservations')
+          .select('id, service, requested_date, requested_time, status, contact_revealed, talent:profiles!talent_id(name, avatar_url, whatsapp)')
+          .eq('client_id', userId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('reservations')
+          .select('id, service, requested_date, requested_time, status, contact_revealed, client:profiles!client_id(name, avatar_url)')
+          .eq('talent_id', userId)
+          .order('created_at', { ascending: false }),
+      ])
+      setClientReservations((clientRes.data ?? []) as ReservationRow[])
+      setTalentReservations((talentRes.data ?? []) as ReservationRow[])
+      setLoadingRes(false)
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  if (loadingRes) return (
+    <div className="flex justify-center py-12">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   return (
     <div>
@@ -378,18 +422,20 @@ function ReservationsTab() {
 
       {subTab === 'client' && (
         <div className="flex flex-col gap-3">
-          {MOCK_RESERVATIONS_CLIENT.map((r) => (
+          {clientReservations.length === 0 ? (
+            <p className="text-brown/50 text-sm py-6 text-center">Aucune réservation pour l&apos;instant.</p>
+          ) : clientReservations.map((r) => (
             <ReservationCard
               key={r.id}
-              name={r.talentName}
-              avatar={r.talentAvatar}
+              name={r.talent?.name ?? '—'}
+              avatar={r.talent?.avatar_url ?? null}
               service={r.service}
-              date={r.date}
-              time={r.time}
+              date={r.requested_date}
+              time={r.requested_time}
               status={r.status}
-              whatsapp={r.whatsapp}
-              hasReview={r.hasReview}
-              onLeaveReview={() => setReviewTarget(r.talentName)}
+              whatsapp={r.talent?.whatsapp ?? ''}
+              hasReview={false}
+              onLeaveReview={() => setReviewTarget(r.talent?.name ?? null)}
             />
           ))}
         </div>
@@ -397,18 +443,20 @@ function ReservationsTab() {
 
       {subTab === 'talent' && (
         <div className="flex flex-col gap-3">
-          {MOCK_RESERVATIONS_TALENT.map((r) => (
+          {talentReservations.length === 0 ? (
+            <p className="text-brown/50 text-sm py-6 text-center">Aucune demande reçue pour l&apos;instant.</p>
+          ) : talentReservations.map((r) => (
             <ReservationCard
               key={r.id}
-              name={r.clientName}
-              avatar={r.clientAvatar}
+              name={r.client?.name ?? '—'}
+              avatar={r.client?.avatar_url ?? null}
               service={r.service}
-              date={r.date}
-              time={r.time}
+              date={r.requested_date}
+              time={r.requested_time}
               status={r.status}
-              whatsapp={r.whatsapp}
-              hasReview={r.hasReview}
-              onLeaveReview={() => setReviewTarget(r.clientName)}
+              whatsapp=""
+              hasReview={false}
+              onLeaveReview={() => setReviewTarget(r.client?.name ?? null)}
             />
           ))}
         </div>
@@ -427,12 +475,15 @@ function ReservationsTab() {
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAuth>['profile']> }) {
+  const supabase = createClient()
   const [name, setName] = useState(profile.name)
   const [city, setCity] = useState(profile.city)
   const [phone, setPhone] = useState(profile.phone ?? '')
   const [bio, setBio] = useState(profile.bio ?? '')
   const [copied, setCopied] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<string[]>(profile.photos ?? [])
 
   const { upload, remove, uploading, error: uploadError, canAdd, maxPhotos, maxSizeMb } =
@@ -446,9 +497,20 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  async function handleSave() {
+    setSaving(true)
+    setSaveError(null)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ name, city, phone: phone || null, bio: bio || null })
+      .eq('id', profile.id)
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message)
+    } else {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    }
   }
 
   return (
@@ -667,12 +729,17 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
       </div>
 
       {/* Save */}
+      {saveError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {saveError}
+        </p>
+      )}
       <Button
         variant="primary"
         size="lg"
         className="w-fit"
         onClick={handleSave}
-        isLoading={false}
+        isLoading={saving}
       >
         {saved ? (
           <>
@@ -689,7 +756,24 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
 
 // ─── Korys Tab ────────────────────────────────────────────────────────────────
 
-function KorysTab({ balance }: { balance: number }) {
+function KorysTab({ balance, userId }: { balance: number; userId: string }) {
+  const supabase = createClient()
+  const [transactions, setTransactions] = useState<{ id: string; created_at: string; reason: string; amount: number }[]>([])
+  const [loadingTx, setLoadingTx] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('kory_transactions')
+        .select('id, created_at, reason, amount')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+      setTransactions(data ?? [])
+      setLoadingTx(false)
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       {/* Balance */}
@@ -749,16 +833,17 @@ function KorysTab({ balance }: { balance: number }) {
                 <th className="text-right px-5 py-3 text-xs font-medium text-brown/50 uppercase tracking-wide">
                   Montant
                 </th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-brown/50 uppercase tracking-wide">
-                  Solde
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brown/6">
-              {MOCK_TRANSACTIONS.map((tx) => (
+              {loadingTx ? (
+                <tr><td colSpan={3} className="px-5 py-6 text-center text-brown/40 text-sm">Chargement…</td></tr>
+              ) : transactions.length === 0 ? (
+                <tr><td colSpan={3} className="px-5 py-6 text-center text-brown/40 text-sm">Aucune transaction.</td></tr>
+              ) : transactions.map((tx) => (
                 <tr key={tx.id} className="hover:bg-brown/2 transition-colors">
                   <td className="px-5 py-3 text-brown/50 whitespace-nowrap">
-                    {new Date(tx.date).toLocaleDateString('fr-FR', {
+                    {new Date(tx.created_at).toLocaleDateString('fr-FR', {
                       day: 'numeric',
                       month: 'short',
                     })}
@@ -771,9 +856,6 @@ function KorysTab({ balance }: { balance: number }) {
                   >
                     {tx.amount > 0 ? '+' : ''}
                     {tx.amount} K
-                  </td>
-                  <td className="px-5 py-3 text-right text-brown/70 font-medium whitespace-nowrap">
-                    {tx.balance} K
                   </td>
                 </tr>
               ))}
@@ -857,9 +939,9 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {activeTab === 'reservations' && <ReservationsTab />}
+        {activeTab === 'reservations' && <ReservationsTab userId={user.id} />}
         {activeTab === 'profil' && <ProfileTab profile={profile} />}
-        {activeTab === 'korys' && <KorysTab balance={profile.kory_balance} />}
+        {activeTab === 'korys' && <KorysTab balance={profile.kory_balance} userId={user.id} />}
       </div>
     </div>
   )

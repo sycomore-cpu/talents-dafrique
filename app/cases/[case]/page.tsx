@@ -7,6 +7,7 @@ import { CASES } from '@/lib/constants'
 import type { Profile } from '@/lib/supabase/types'
 import { TalentCard } from '@/components/talent/TalentCard'
 import { FilterBar } from '@/components/cases/FilterBar'
+import { createClient } from '@/lib/supabase/server'
 
 // ─── Static params ─────────────────────────────────────────────────────────────
 
@@ -1222,8 +1223,21 @@ export default async function CasePage({
     notFound()
   }
 
-  // Fallback to beaute mock data for cases not individually mocked
-  const talents = mockTalentsByCase[caseSlug] ?? mockTalentsByCase.beaute
+  // Load real talents from Supabase
+  const supabase = await createClient()
+  const { data: talentsData } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('is_talent', true)
+    .eq('case_slug', caseSlug)
+    .neq('status', 'suspendu')
+    .order('trust_score', { ascending: false })
+
+  // Fall back to mock data if no real talents yet
+  const talents: Profile[] =
+    talentsData && talentsData.length > 0
+      ? (talentsData as Profile[])
+      : (mockTalentsByCase[caseSlug] ?? mockTalentsByCase.beaute)
 
   return (
     <div className="min-h-screen bg-cream">

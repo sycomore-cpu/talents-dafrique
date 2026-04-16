@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
@@ -9,25 +9,8 @@ import { Badge } from '@/components/ui/Badge'
 import { getCaseBySlug } from '@/lib/utils'
 import { Info, Coins } from 'lucide-react'
 import { useAuth } from '@/components/layout/AuthProvider'
-
-// ─── Mock talent data ─────────────────────────────────────────────────────────
-
-const MOCK_TALENT = {
-  id: '1',
-  name: 'Aminata Diallo',
-  avatar_url: null as string | null,
-  city: 'Paris',
-  case_slug: 'beaute',
-  status: 'parraine' as const,
-  sub_services: [
-    'Coiffure (braids, locks, perruques)',
-    'Onglerie (gel, résine, nail art)',
-    'Épilation',
-  ],
-  bio: 'Coiffeuse professionnelle spécialisée dans les tresses africaines et les locks. 8 ans d\'expérience.',
-  review_count: 47,
-  trust_score: 4.8,
-}
+import { createClient } from '@/lib/supabase/client'
+import type { Profile } from '@/lib/supabase/types'
 
 // ─── Time slots ───────────────────────────────────────────────────────────────
 
@@ -47,8 +30,6 @@ function generateTimeSlots(): { value: string; label: string }[] {
 
 const TIME_SLOTS = generateTimeSlots()
 
-// ─── Today's date as min ──────────────────────────────────────────────────────
-
 function todayISO(): string {
   return new Date().toISOString().split('T')[0]
 }
@@ -60,15 +41,14 @@ export default function ReserverPage({
 }: {
   params: Promise<{ talentId: string }>
 }) {
-  // In Next.js 16 App Router, params is a Promise for both Server and Client Components.
-  // For Client Components, use React.use() to unwrap it.
   const { talentId } = React.use(params)
-  void talentId
-
   const { user, loading } = useAuth()
   const router = useRouter()
-  const talent = MOCK_TALENT
-  const caseData = getCaseBySlug(talent.case_slug)
+  const supabase = createClient()
+
+  const [talent, setTalent] = useState<Profile | null>(null)
+  const [loadingTalent, setLoadingTalent] = useState(true)
+  const [talentError, setTalentError] = useState(false)
 
   const [service, setService] = useState('')
   const [date, setDate] = useState('')
@@ -76,8 +56,28 @@ export default function ReserverPage({
   const [description, setDescription] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  if (loading) return (
+  useEffect(() => {
+    async function loadTalent() {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', talentId)
+        .eq('is_talent', true)
+        .single()
+      if (error || !data) {
+        setTalentError(true)
+      } else {
+        setTalent(data as Profile)
+      }
+      setLoadingTalent(false)
+    }
+    loadTalent()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [talentId])
+
+  if (loading || loadingTalent) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
     </div>
@@ -101,12 +101,40 @@ export default function ReserverPage({
     </div>
   )
 
+  if (talentError || !talent) return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="text-center">
+        <p className="text-brown/60 mb-4">Ce talent est introuvable.</p>
+        <Button href="/" variant="outline">Retour à l&apos;accueil</Button>
+      </div>
+    </div>
+  )
+
+  const caseData = getCaseBySlug(talent.case_slug ?? '')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!user) return
     setSubmitting(true)
-    await new Promise((r) => setTimeout(r, 1200))
-    setSubmitting(false)
-    setSubmitted(true)
+    setSubmitError(null)
+
+    const { error } = await supabase.from('reservations').insert({
+      client_id: user.id,
+      talent_id: talent!.id,
+      service,
+      description: description || null,
+      requested_date: date,
+      requested_time: time,
+      status: 'pending',
+    })
+
+    if (error) {
+      setSubmitError(error.message)
+      setSubmitting(false)
+    } else {
+      setSubmitting(false)
+      setSubmitted(true)
+    }
   }
 
   if (submitted) {
@@ -248,6 +276,12 @@ export default function ReserverPage({
               rows={4}
               helper="Ces informations aideront le talent à mieux préparer votre prestation."
             />
+
+            {submitError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {submitError}
+              </p>
+            )}
 
             <Button
               type="submit"
