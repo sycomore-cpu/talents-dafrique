@@ -806,10 +806,25 @@ type Tab = 'reservations' | 'profil' | 'korys'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, refreshProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('reservations')
+  const [profileTimedOut, setProfileTimedOut] = useState(false)
 
-  if (loading) {
+  // Redirect non-authentifié en useEffect (pas dans le render)
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/connexion')
+    }
+  }, [loading, user, router])
+
+  // Timeout si profil jamais chargé (ex: trigger Supabase manqué)
+  useEffect(() => {
+    if (loading || !user || profile) return
+    const t = setTimeout(() => setProfileTimedOut(true), 6000)
+    return () => clearTimeout(t)
+  }, [loading, user, profile])
+
+  if (loading || (!user && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full" />
@@ -817,14 +832,25 @@ export default function DashboardPage() {
     )
   }
 
-  // Pas d'utilisateur → connexion
-  if (!user) {
-    router.replace('/connexion')
-    return null
-  }
+  if (!user) return null
 
-  // Utilisateur connecté mais profil encore en chargement → petit spinner
+  // Profil en chargement
   if (!profile) {
+    if (profileTimedOut) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-cream">
+          <div className="text-center max-w-sm px-4">
+            <p className="text-brown/70 mb-4">Impossible de charger ton profil.</p>
+            <button
+              onClick={() => { setProfileTimedOut(false); refreshProfile() }}
+              className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full" />

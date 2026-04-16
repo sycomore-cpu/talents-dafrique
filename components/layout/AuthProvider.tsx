@@ -29,6 +29,7 @@ async function fetchOrCreateProfile(
   userMeta: Record<string, unknown>
 ): Promise<Profile | null> {
   try {
+    // 1. Essaie de récupérer le profil existant
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -37,26 +38,38 @@ async function fetchOrCreateProfile(
 
     if (data) return data as Profile
 
-    // Profil absent (trigger manqué) → on le crée
+    // 2. Profil absent → on le crée (trigger manqué ou race condition)
     if (error?.code === 'PGRST116') {
       const code = Math.random().toString(36).slice(2, 10).toUpperCase()
       const name =
         (userMeta?.full_name as string) ??
         (userMeta?.email as string) ??
         'Nouveau membre'
-      const { data: created } = await supabase
+      const { data: created, error: insertError } = await supabase
         .from('profiles')
         .insert({ id: userId, name, parrain_code: code, kory_balance: 10 })
         .select()
         .single()
+
       if (created) {
+        // Créditer les Korys de bienvenue
         await supabase.from('kory_transactions').insert({
           user_id: userId,
           amount: 10,
           reason: "Bienvenue sur Talents d'Afrique !",
         })
+        return created as Profile
       }
-      return (created as Profile) ?? null
+
+      // 3. Conflit (le trigger a déjà créé le profil entre-temps) → re-fetch
+      if (insertError?.code === '23505') {
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+        return (existing as Profile) ?? null
+      }
     }
     return null
   } catch {

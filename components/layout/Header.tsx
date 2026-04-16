@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { CASES } from '@/lib/constants'
 import { useAuth } from '@/components/layout/AuthProvider'
@@ -73,7 +73,8 @@ function CasesDropdown() {
 }
 
 function UserMenu() {
-  const { user, profile, signOut } = useAuth()
+  const { user, profile, loading, signOut } = useAuth()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -87,7 +88,19 @@ function UserMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  if (!user || !profile) {
+  const handleSignOut = async () => {
+    setOpen(false)
+    await signOut()
+    router.replace('/')
+  }
+
+  // Auth en cours de chargement → rien (évite le flash)
+  if (loading) {
+    return <div className="w-24 h-8 rounded-lg bg-brown/5 animate-pulse" />
+  }
+
+  // Non connecté → boutons d'accès
+  if (!user) {
     return (
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" href="/connexion">
@@ -96,6 +109,16 @@ function UserMenu() {
         <Button variant="primary" size="sm" href="/inscription">
           Partager mon talent
         </Button>
+      </div>
+    )
+  }
+
+  // Connecté mais profil en chargement → avatar squelette
+  if (!profile) {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="w-16 h-5 rounded bg-brown/10 animate-pulse" />
+        <div className="w-8 h-8 rounded-full bg-brown/10 animate-pulse" />
       </div>
     )
   }
@@ -169,7 +192,7 @@ function UserMenu() {
           )}
           <div className="my-1 border-t border-brown/10" />
           <button
-            onClick={() => { setOpen(false); signOut() }}
+            onClick={handleSignOut}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
