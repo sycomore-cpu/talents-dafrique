@@ -724,7 +724,7 @@ function SuccessScreen({ isTalent }: { isTalent: boolean }) {
 function InscriptionInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
   const supabase = createClient()
 
   const [step, setStep] = useState(1)
@@ -737,17 +737,24 @@ function InscriptionInner() {
   // Lire le paramètre ?step= et avancer si déjà connecté
   useEffect(() => {
     if (authLoading) return
+    if (!user) return
+
     const urlStep = parseInt(searchParams.get('step') ?? '1')
-    if (user) {
-      if (urlStep >= 2) {
-        setEmail(user.email ?? '')
-        setStep(2)
-      } else {
-        // Déjà connecté sans step=2 → dashboard
-        router.replace('/dashboard')
-      }
+
+    // Utilisateur avec profil déjà complété → dashboard directement
+    if (profile?.name) {
+      router.replace('/dashboard')
+      return
     }
-  }, [user, authLoading, searchParams, router])
+
+    // Nouvel utilisateur (pas encore de profil complet) → étape 2
+    if (urlStep >= 2) {
+      setEmail(user.email ?? '')
+      setStep(2)
+    } else {
+      router.replace('/dashboard')
+    }
+  }, [user, profile, authLoading, searchParams, router])
 
   const handleStep1Success = (authEmail: string) => {
     setEmail(authEmail)
