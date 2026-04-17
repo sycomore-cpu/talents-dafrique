@@ -113,22 +113,12 @@ function UserMenu() {
     )
   }
 
-  // Connecté mais profil en chargement ET pas encore de profile → bouton simple vers dashboard
+  // Connecté mais profil pas encore chargé → bouton simple vers dashboard
   if (!profile) {
     return (
       <Button variant="primary" size="sm" href="/dashboard">
         Mon espace
       </Button>
-    )
-  }
-
-  // Connecté mais profil en chargement → avatar squelette
-  if (!profile) {
-    return (
-      <div className="flex items-center gap-3">
-        <div className="w-16 h-5 rounded bg-brown/10 animate-pulse" />
-        <div className="w-8 h-8 rounded-full bg-brown/10 animate-pulse" />
-      </div>
     )
   }
 

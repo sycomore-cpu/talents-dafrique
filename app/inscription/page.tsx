@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/components/layout/AuthProvider'
 import { CASES, VILLES, AVAILABILITY_DAYS, KORY_WELCOME } from '@/lib/constants'
