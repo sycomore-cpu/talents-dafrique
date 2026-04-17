@@ -903,6 +903,15 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>('reservations')
   const [profileTimedOut, setProfileTimedOut] = useState(false)
 
+  // Ouvrir directement l'onglet demandé via ?tab=
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tab = new URLSearchParams(window.location.search).get('tab') as Tab | null
+    if (tab && ['reservations', 'profil', 'korys'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [])
+
   // Redirect non-authentifié en useEffect (pas dans le render)
   useEffect(() => {
     if (!loading && !user) {

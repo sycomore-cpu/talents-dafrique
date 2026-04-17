@@ -113,6 +113,15 @@ function UserMenu() {
     )
   }
 
+  // Connecté mais profil en chargement ET pas encore de profile → bouton simple vers dashboard
+  if (!profile) {
+    return (
+      <Button variant="primary" size="sm" href="/dashboard">
+        Mon espace
+      </Button>
+    )
+  }
+
   // Connecté mais profil en chargement → avatar squelette
   if (!profile) {
     return (
@@ -178,6 +187,18 @@ function UserMenu() {
             </svg>
             Mon profil
           </Link>
+          {!profile.is_talent && (
+            <Link
+              href="/dashboard?tab=profil"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-primary font-medium hover:bg-primary/5 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Proposer mes services
+            </Link>
+          )}
           {profile.is_admin && (
             <Link
               href="/admin"

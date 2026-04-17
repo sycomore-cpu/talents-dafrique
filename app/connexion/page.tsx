@@ -1,23 +1,18 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/components/layout/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
-// ─── Divider ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function Divider({ label }: { label: string }) {
-  return (
-    <div className="relative flex items-center gap-3" aria-hidden="true">
-      <div className="flex-1 h-px bg-brown/10" />
-      <span className="text-xs text-brown/40 font-medium">{label}</span>
-      <div className="flex-1 h-px bg-brown/10" />
-    </div>
-  )
+/** Pose un cookie court (10 min) pour indiquer où rediriger après OAuth */
+function setAuthNextCookie(next: string) {
+  document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=600; SameSite=Lax`
 }
 
 // ─── Google button ────────────────────────────────────────────────────────────
@@ -28,7 +23,7 @@ function GoogleButton({ onClick, isLoading }: { onClick: () => void; isLoading: 
       type="button"
       onClick={onClick}
       disabled={isLoading}
-      className="w-full flex items-center justify-center gap-3 h-11 rounded-xl border-2 border-brown/15 bg-white text-brown font-medium text-sm hover:border-brown/30 hover:bg-brown/2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50 disabled:pointer-events-none"
+      className="w-full flex items-center justify-center gap-3 h-11 rounded-xl border-2 border-brown/15 bg-white text-brown font-medium text-sm hover:border-brown/30 hover:bg-brown/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50 disabled:pointer-events-none"
     >
       {isLoading ? (
         <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -48,31 +43,54 @@ function GoogleButton({ onClick, isLoading }: { onClick: () => void; isLoading: 
   )
 }
 
+function Divider({ label }: { label: string }) {
+  return (
+    <div className="relative flex items-center gap-3" aria-hidden="true">
+      <div className="flex-1 h-px bg-brown/10" />
+      <span className="text-xs text-brown/40 font-medium">{label}</span>
+      <div className="flex-1 h-px bg-brown/10" />
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConnexionPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { user, loading: authLoading } = useAuth()
 
   const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingEmail, setLoadingEmail] = useState(false)
-  const [loadingOtp, setLoadingOtp] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+
+  // Redirect si déjà connecté
+  useEffect(() => {
+    if (!authLoading && user) {
+      const params = new URLSearchParams(window.location.search)
+      router.replace(params.get('redirect') ?? '/dashboard')
+    }
+  }, [authLoading, user, router])
+
+  function getNextUrl(): string {
+    if (typeof window === 'undefined') return '/dashboard'
+    const params = new URLSearchParams(window.location.search)
+    return params.get('redirect') ?? '/dashboard'
+  }
 
   const handleGoogle = async () => {
     setLoadingGoogle(true)
     setError(null)
-    // Récupère le paramètre ?redirect= pour renvoyer l'utilisateur après connexion
-    const params = new URLSearchParams(window.location.search)
-    const next = params.get('redirect') ?? '/dashboard'
+    const next = getNextUrl()
+    // Cookie pour éviter les URL complexes dans redirectTo (Supabase exige des URL enregistrées exactement)
+    setAuthNextCookie(next)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        // URL simple, enregistrée dans Supabase
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
     if (error) {
@@ -81,56 +99,38 @@ export default function ConnexionPage() {
     }
   }
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
     setLoadingEmail(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithOtp({ email })
-    if (error) {
-      setError(error.message)
-    } else {
-      setOtpSent(true)
-    }
-    setLoadingEmail(false)
-  }
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!otp) return
-    setLoadingOtp(true)
-    setError(null)
-    const { error } = await supabase.auth.verifyOtp({
+    const next = getNextUrl()
+    // emailRedirectTo → Supabase envoie un lien magique cliquable (plus fiable qu'OTP selon config projet)
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      token: otp,
-      type: 'email',
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
     })
     if (error) {
       setError(error.message)
     } else {
-      setSuccess(true)
-      const params = new URLSearchParams(window.location.search)
-      const next = params.get('redirect') ?? '/dashboard'
-      setTimeout(() => router.push(next), 1500)
+      setEmailSent(true)
     }
-    setLoadingOtp(false)
+    setLoadingEmail(false)
   }
 
-  if (success) {
+  // Afficher un loader pendant que l'auth se vérifie (évite le flash du form)
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-secondary/10 text-4xl">
-              ✓
-            </div>
-          </div>
-          <h2 className="text-xl font-bold font-heading text-brown">Connecté !</h2>
-          <p className="text-sm text-brown/60">Redirection en cours...</p>
-        </div>
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
       </div>
     )
   }
+
+  // Déjà connecté → on n'affiche rien (useEffect va rediriger)
+  if (user) return null
 
   return (
     <div className="min-h-screen bg-cream flex flex-col items-center justify-start py-12 px-4">
@@ -142,154 +142,98 @@ export default function ConnexionPage() {
             className="inline-flex items-center gap-2 text-brown hover:text-primary transition-colors"
           >
             <span className="text-2xl">🌍</span>
-            <span className="font-heading font-bold text-xl">Talents d'Afrique</span>
+            <span className="font-heading font-bold text-xl">Talents d&apos;Afrique</span>
           </Link>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-brown/10 p-6 sm:p-8 space-y-6">
-          {/* Header */}
-          <div className="text-center">
-            <h1 className="text-2xl sm:text-3xl font-bold font-heading text-brown mb-2">
-              Bon retour !
-            </h1>
-            <p className="text-brown/60 text-sm">
-              Content de vous revoir sur Talents d'Afrique.
-            </p>
-          </div>
 
-          {/* Google */}
-          <GoogleButton onClick={handleGoogle} isLoading={loadingGoogle} />
+          {error === 'auth' && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+              Une erreur est survenue. Veuillez réessayer.
+            </div>
+          )}
 
-          <Divider label="ou" />
-
-          {/* Email OTP */}
-          {!otpSent ? (
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <Input
-                label="Adresse e-mail"
-                type="email"
-                placeholder="vous@exemple.fr"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null) }}
-                required
-                id="email"
-              />
-
-              {error && (
-                <p
-                  className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              )}
-
-              <Button
-                type="submit"
-                fullWidth
-                isLoading={loadingEmail}
-                disabled={!email}
-              >
-                Recevoir un code de connexion
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              {/* Email sent notice */}
-              <div className="flex items-start gap-3 p-4 bg-secondary/5 rounded-xl border border-secondary/15">
-                <svg
-                  className="w-5 h-5 text-secondary shrink-0 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
+          {emailSent ? (
+            /* ── Email envoyé → afficher confirmation ── */
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm text-brown/70">
-                  Code envoyé à{' '}
-                  <span className="font-semibold text-brown">{email}</span>.
-                  Vérifiez vos spams si besoin.
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-brown font-heading">Vérifiez vos e-mails !</h2>
+                <p className="text-sm text-brown/60 mt-1">
+                  Nous avons envoyé un lien de connexion à<br />
+                  <span className="font-semibold text-brown">{email}</span>
+                </p>
+                <p className="text-xs text-brown/40 mt-3">
+                  Cliquez sur le lien dans l&apos;e-mail pour vous connecter.<br />
+                  Vérifiez vos spams si vous ne le voyez pas.
+                </p>
+              </div>
+              <button
+                onClick={() => { setEmailSent(false); setEmail('') }}
+                className="text-sm text-primary hover:underline"
+              >
+                Utiliser une autre adresse
+              </button>
+            </div>
+          ) : (
+            /* ── Formulaire de connexion ── */
+            <>
+              <div className="text-center">
+                <h1 className="text-2xl sm:text-3xl font-bold font-heading text-brown mb-2">
+                  Bon retour !
+                </h1>
+                <p className="text-brown/60 text-sm">
+                  Content de vous revoir sur Talents d&apos;Afrique.
                 </p>
               </div>
 
-              <Input
-                label="Code à 6 chiffres"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="123456"
-                value={otp}
-                onChange={(e) => {
-                  setOtp(e.target.value.replace(/\D/g, ''))
-                  setError(null)
-                }}
-                required
-                id="otp"
-              />
+              <GoogleButton onClick={handleGoogle} isLoading={loadingGoogle} />
 
-              {error && (
-                <p
-                  className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-                  role="alert"
-                >
-                  {error}
+              <Divider label="ou" />
+
+              <form onSubmit={handleSendEmail} className="space-y-4">
+                <Input
+                  label="Adresse e-mail"
+                  type="email"
+                  placeholder="vous@exemple.fr"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(null) }}
+                  required
+                  id="email"
+                />
+                {error && error !== 'auth' && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
+                    {error}
+                  </p>
+                )}
+                <Button type="submit" fullWidth isLoading={loadingEmail} disabled={!email}>
+                  Recevoir un lien de connexion
+                </Button>
+              </form>
+
+              <div className="pt-2 border-t border-brown/8 text-center space-y-2">
+                <p className="text-sm text-brown/50">
+                  Pas encore de compte ?{' '}
+                  <Link href="/inscription" className="text-primary hover:underline font-medium">
+                    Créer un compte
+                  </Link>
                 </p>
-              )}
-
-              <Button
-                type="submit"
-                fullWidth
-                isLoading={loadingOtp}
-                disabled={otp.length !== 6}
-              >
-                Me connecter
-              </Button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpSent(false)
-                  setOtp('')
-                  setError(null)
-                }}
-                className="w-full text-sm text-brown/50 hover:text-primary transition-colors"
-              >
-                ← Utiliser une autre adresse e-mail
-              </button>
-            </form>
+                <Link href="/" className="text-xs text-brown/40 hover:text-primary transition-colors">
+                  ← Retour à l&apos;accueil
+                </Link>
+              </div>
+            </>
           )}
-
-          {/* Footer links */}
-          <div className="pt-2 border-t border-brown/8 text-center space-y-2">
-            <p className="text-sm text-brown/50">
-              Pas encore de compte ?{' '}
-              <Link
-                href="/inscription"
-                className="text-primary hover:underline font-medium"
-              >
-                Créer un compte
-              </Link>
-            </p>
-            <p className="text-sm text-brown/50">
-              <Link
-                href="/"
-                className="text-brown/40 hover:text-primary transition-colors text-xs"
-              >
-                ← Retour à l'accueil
-              </Link>
-            </p>
-          </div>
         </div>
 
-        {/* Trust signals */}
+        {/* Trust */}
         <div className="mt-6 flex items-center justify-center gap-6 text-xs text-brown/40">
           <span className="flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -303,13 +247,6 @@ export default function ConnexionPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
             Données protégées
-          </span>
-          <span aria-hidden="true">·</span>
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Communauté vérifiée
           </span>
         </div>
       </div>

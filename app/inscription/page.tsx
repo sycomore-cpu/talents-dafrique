@@ -113,22 +113,25 @@ interface Step1Props {
   onSuccess: (email: string) => void
 }
 
-function Step1Auth({ onSuccess }: Step1Props) {
+function Step1Auth({ onSuccess: _onSuccess }: Step1Props) {
   const supabase = createClient()
   const [email, setEmail] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
-  const [otp, setOtp] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingEmail, setLoadingEmail] = useState(false)
-  const [loadingOtp, setLoadingOtp] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleGoogle = async () => {
     setLoadingGoogle(true)
     setError(null)
+    // Cookie pour transmettre la destination sans URL complexe dans redirectTo
+    document.cookie = `auth_next=${encodeURIComponent('/inscription?step=2')}; path=/; max-age=600; SameSite=Lax`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/inscription?step=2')}` },
+      options: {
+        // URL simple, enregistrée exactement dans Supabase Auth settings
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
     if (error) {
       setError(error.message)
@@ -136,36 +139,25 @@ function Step1Auth({ onSuccess }: Step1Props) {
     }
   }
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
     setLoadingEmail(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithOtp({ email })
-    if (error) {
-      setError(error.message)
-    } else {
-      setOtpSent(true)
-    }
-    setLoadingEmail(false)
-  }
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!otp) return
-    setLoadingOtp(true)
-    setError(null)
-    const { error } = await supabase.auth.verifyOtp({
+    // Magic link avec emailRedirectTo → Supabase envoie un lien cliquable
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      token: otp,
-      type: 'email',
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/inscription?step=2')}`,
+        shouldCreateUser: true,
+      },
     })
     if (error) {
       setError(error.message)
     } else {
-      onSuccess(email)
+      setEmailSent(true)
     }
-    setLoadingOtp(false)
+    setLoadingEmail(false)
   }
 
   return (
@@ -175,8 +167,8 @@ function Step1Auth({ onSuccess }: Step1Props) {
           Créer mon compte
         </h1>
         <p className="text-brown/60 text-sm">
-          Rejoignez la communauté Talents d'Afrique et recevez{' '}
-          <span className="font-semibold text-kory-700">{KORY_WELCOME} Korys</span> à l'inscription.
+          Rejoignez la communauté Talents d&apos;Afrique et recevez{' '}
+          <span className="font-semibold text-kory-700">{KORY_WELCOME} Korys</span> à l&apos;inscription.
         </p>
       </div>
 
@@ -184,8 +176,8 @@ function Step1Auth({ onSuccess }: Step1Props) {
 
       <Divider label="ou" />
 
-      {!otpSent ? (
-        <form onSubmit={handleSendOtp} className="space-y-4">
+      {!emailSent ? (
+        <form onSubmit={handleSendEmail} className="space-y-4">
           <Input
             label="Adresse e-mail"
             type="email"
@@ -201,46 +193,36 @@ function Step1Auth({ onSuccess }: Step1Props) {
             </p>
           )}
           <Button type="submit" fullWidth isLoading={loadingEmail} disabled={!email}>
-            Recevoir un code
+            Recevoir un lien d&apos;inscription
           </Button>
         </form>
       ) : (
-        <form onSubmit={handleVerifyOtp} className="space-y-4">
-          <div className="text-center p-4 bg-secondary/5 rounded-xl border border-secondary/15">
-            <p className="text-sm text-brown/70">
-              Un code à 6 chiffres a été envoyé à{' '}
+        /* ── Email envoyé → confirmation ── */
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-brown">Vérifiez vos e-mails !</p>
+            <p className="text-sm text-brown/60 mt-1">
+              Un lien d&apos;inscription a été envoyé à<br />
               <span className="font-semibold text-brown">{email}</span>
             </p>
-          </div>
-          <Input
-            label="Code de vérification"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]{6}"
-            maxLength={6}
-            placeholder="123456"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            required
-            id="otp"
-            helper="Vérifiez vos spams si vous ne le trouvez pas."
-          />
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
-              {error}
+            <p className="text-xs text-brown/40 mt-3">
+              Cliquez sur le lien dans l&apos;e-mail pour créer votre compte.<br />
+              Vérifiez vos spams si vous ne le voyez pas.
             </p>
-          )}
-          <Button type="submit" fullWidth isLoading={loadingOtp} disabled={otp.length !== 6}>
-            Valider mon code
-          </Button>
+          </div>
           <button
-            type="button"
-            onClick={() => { setOtpSent(false); setOtp(''); setError(null) }}
-            className="w-full text-sm text-brown/50 hover:text-primary transition-colors"
+            onClick={() => { setEmailSent(false); setEmail(''); setError(null) }}
+            className="text-sm text-primary hover:underline"
           >
-            Modifier l'adresse e-mail
+            Utiliser une autre adresse
           </button>
-        </form>
+        </div>
       )}
 
       <p className="text-center text-sm text-brown/50">
