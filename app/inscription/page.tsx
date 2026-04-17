@@ -837,7 +837,7 @@ function InscriptionInner() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 text-brown hover:text-primary transition-colors">
             <span className="text-2xl">🌍</span>
-            <span className="font-heading font-bold text-xl">Talents d'Afrique</span>
+            <span className="font-heading font-bold text-xl">Talents d&apos;Afrique</span>
           </Link>
         </div>
 

@@ -11,7 +11,6 @@ import { Input, Textarea, Select } from '@/components/ui/Input'
 import { KoryBalance } from '@/components/ui/KoryBalance'
 import { StarRating } from '@/components/ui/StarRating'
 import { CASES, AVAILABILITY_DAYS, VILLES } from '@/lib/constants'
-import { getCaseBySlug } from '@/lib/utils'
 import type { ReservationStatus } from '@/lib/supabase/types'
 import {
   Copy,
@@ -900,17 +899,15 @@ type Tab = 'reservations' | 'profil' | 'korys'
 export default function DashboardPage() {
   const router = useRouter()
   const { user, profile, loading, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<Tab>('reservations')
-  const [profileTimedOut, setProfileTimedOut] = useState(false)
-
-  // Ouvrir directement l'onglet demandé via ?tab=
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const tab = new URLSearchParams(window.location.search).get('tab') as Tab | null
-    if (tab && ['reservations', 'profil', 'korys'].includes(tab)) {
-      setActiveTab(tab)
+  // Initialiser l'onglet actif depuis ?tab= dès le premier render (pas d'effect)
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      const tab = new URLSearchParams(window.location.search).get('tab') as Tab | null
+      if (tab && (['reservations', 'profil', 'korys'] as string[]).includes(tab)) return tab
     }
-  }, [])
+    return 'reservations'
+  })
+  const [profileTimedOut, setProfileTimedOut] = useState(false)
 
   // Redirect non-authentifié en useEffect (pas dans le render)
   useEffect(() => {

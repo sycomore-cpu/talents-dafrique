@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
   const { secure_url } = await uploadRes.json() as { secure_url: string }
 
   // ── Mettre à jour le profil Supabase ─────────────────────────────────────────
-  let updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (uploadType === 'avatar') {
     updatePayload.avatar_url = secure_url
   } else {

@@ -13,7 +13,7 @@ export default function ParrainagePage() {
         <div className="text-center mb-12">
           <span className="text-5xl">🤝</span>
           <h1 className="text-3xl sm:text-4xl font-bold font-heading text-brown mt-4 mb-3">
-            Le parrainage Talents d'Afrique
+            Le parrainage Talents d&apos;Afrique
           </h1>
           <p className="text-brown/60 text-lg">
             Invitez vos proches et gagnez des Korys ensemble.

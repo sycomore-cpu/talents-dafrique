@@ -73,7 +73,7 @@ export default function ContactPage() {
         <p className="text-center text-sm text-brown/40 mt-8">
           Délai de réponse habituel : 24–48h ouvrées.{' '}
           <Link href="/" className="text-primary hover:underline">
-            Retour à l'accueil
+            Retour à l&apos;accueil
           </Link>
         </p>
       </div>

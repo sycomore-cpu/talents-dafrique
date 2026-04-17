@@ -484,7 +484,7 @@ export default async function TalentProfilePage({
               </div>
               <p className="text-xs text-brown/60 leading-relaxed">
                 Certaines réservations consomment des Korys, notre monnaie communautaire.
-                Recevez 10 Korys gratuits à l'inscription.
+                Recevez 10 Korys gratuits à l&apos;inscription.
               </p>
             </div>
 
