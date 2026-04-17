@@ -1234,10 +1234,11 @@ export default async function CasePage({
     .order('trust_score', { ascending: false })
 
   // Fall back to mock data if no real talents yet
-  const talents: Profile[] =
+  const talents: Profile[] = (
     talentsData && talentsData.length > 0
-      ? (talentsData as unknown as Profile[])
+      ? talentsData
       : (mockTalentsByCase[caseSlug] ?? mockTalentsByCase.beaute)
+  ) as unknown as Profile[]
 
   return (
     <div className="min-h-screen bg-cream">
