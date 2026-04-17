@@ -634,106 +634,191 @@ function ModerationTab() {
 
 // ─── Blog Tab ─────────────────────────────────────────────────────────────────
 
-function BlogTab() {
-  const [posts, setPosts] = useState(MOCK_BLOG_POSTS)
+type BlogStatus = 'draft' | 'pending' | 'published' | 'rejected'
 
-  function togglePublish(id: string) {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, published: !p.published } : p))
-    )
+interface BlogPost {
+  id: string
+  title: string
+  slug: string
+  case_slug: string | null
+  status: BlogStatus
+  author_name: string
+  published_at: string | null
+  created_at: string
+}
+
+const STATUS_LABELS: Record<BlogStatus, { label: string; className: string }> = {
+  published: { label: 'Publié', className: 'bg-green-50 text-green-700 border-green-200' },
+  pending:   { label: 'En attente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  draft:     { label: 'Brouillon', className: 'bg-gray-100 text-gray-500 border-gray-200' },
+  rejected:  { label: 'Refusé', className: 'bg-red-50 text-red-600 border-red-200' },
+}
+
+function BlogTab() {
+  const supabase = createClient()
+  const [posts, setPosts] = useState<BlogPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('blog_posts')
+      .select('id, title, slug, case_slug, status, author_name, published_at, created_at')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setPosts((data as BlogPost[]) ?? [])
+        setLoading(false)
+      })
+  }, [supabase])
+
+  const pendingCount = posts.filter((p) => p.status === 'pending').length
+
+  async function updateStatus(id: string, status: BlogStatus) {
+    setActionLoading(id + status)
+    const res = await fetch(`/api/blog/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (res.ok) {
+      setPosts((prev) => prev.map((p) => p.id === id ? { ...p, status } : p))
+    }
+    setActionLoading(null)
   }
 
-  function deletePost(id: string) {
-    setPosts((prev) => prev.filter((p) => p.id !== id))
+  async function deletePost(id: string) {
+    if (!confirm('Supprimer cet article définitivement ?')) return
+    setActionLoading(id + 'del')
+    const res = await fetch(`/api/blog/${id}`, { method: 'DELETE' })
+    if (res.ok) setPosts((prev) => prev.filter((p) => p.id !== id))
+    setActionLoading(null)
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-brown">Articles du blog</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold text-brown">Articles du blog</h3>
+          {pendingCount > 0 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              {pendingCount} en attente
+            </span>
+          )}
+        </div>
         <Button variant="primary" size="sm" href="/admin/blog/nouveau">
           <CirclePlus className="w-3.5 h-3.5" />
           Nouvel article
         </Button>
       </div>
 
-      <div className="bg-white rounded-xl border border-brown/10 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-brown/2">
-                {['Titre', 'Case', 'Statut', 'Date', 'Actions'].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-3 text-xs font-medium text-brown/40 uppercase tracking-wide whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brown/6">
-              {posts.map((post) => (
-                <tr key={post.id} className="hover:bg-brown/2 transition-colors">
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-brown line-clamp-1 max-w-xs">
-                      {post.title}
-                    </p>
-                  </td>
-                  <td className="px-5 py-3 text-brown/60">{post.case ?? '—'}</td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full text-xs font-medium px-2.5 py-0.5 ${
-                        post.published
-                          ? 'bg-green-50 text-green-700 border border-green-200'
-                          : 'bg-gray-100 text-gray-500 border border-gray-200'
-                      }`}
-                    >
-                      {post.published ? 'Publié' : 'Brouillon'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-brown/50 whitespace-nowrap">
-                    {new Date(post.date).toLocaleDateString('fr-FR')}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="p-1.5 rounded-lg hover:bg-brown/5 text-brown/50 hover:text-brown transition-colors"
-                        title="Voir"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="p-1.5 rounded-lg hover:bg-brown/5 text-brown/50 hover:text-brown transition-colors"
-                        title="Éditer"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => togglePublish(post.id)}
-                        className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
-                          post.published
-                            ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
-                            : 'text-green-700 bg-green-50 hover:bg-green-100'
-                        }`}
-                      >
-                        {post.published ? 'Dépublier' : 'Publier'}
-                      </button>
-                      <button
-                        onClick={() => deletePost(post.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-brown/30 hover:text-red-600 transition-colors"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="bg-white rounded-xl border border-brown/10 p-8 text-center">
+          <RotateCcw className="w-5 h-5 text-brown/30 animate-spin mx-auto" />
         </div>
-      </div>
+      ) : posts.length === 0 ? (
+        <div className="bg-white rounded-xl border border-brown/10 p-8 text-center text-brown/40 text-sm">
+          Aucun article pour l&apos;instant.{' '}
+          <a href="/admin/blog/nouveau" className="text-primary hover:underline">
+            Créer le premier
+          </a>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-brown/10 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-brown/2">
+                  {['Titre', 'Auteur', 'Case', 'Statut', 'Date', 'Actions'].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-brown/40 uppercase tracking-wide whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brown/6">
+                {posts.map((post) => {
+                  const s = STATUS_LABELS[post.status]
+                  const isLoading = actionLoading?.startsWith(post.id)
+                  return (
+                    <tr key={post.id} className={`hover:bg-brown/2 transition-colors ${post.status === 'pending' ? 'bg-amber-50/30' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-brown line-clamp-1 max-w-[200px]">{post.title}</p>
+                      </td>
+                      <td className="px-4 py-3 text-brown/60 text-xs">{post.author_name}</td>
+                      <td className="px-4 py-3 text-brown/60">{post.case_slug ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full text-xs font-medium px-2 py-0.5 border ${s.className}`}>
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-brown/50 text-xs whitespace-nowrap">
+                        {new Date(post.published_at ?? post.created_at).toLocaleDateString('fr-FR')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={`/blog/${post.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg hover:bg-brown/5 text-brown/50 hover:text-brown transition-colors"
+                            title="Voir"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </a>
+                          {post.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => updateStatus(post.id, 'published')}
+                                disabled={!!isLoading}
+                                className="text-xs font-medium px-2 py-1 rounded-lg text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
+                              >
+                                ✓ Approuver
+                              </button>
+                              <button
+                                onClick={() => updateStatus(post.id, 'rejected')}
+                                disabled={!!isLoading}
+                                className="text-xs font-medium px-2 py-1 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+                              >
+                                Refuser
+                              </button>
+                            </>
+                          )}
+                          {post.status === 'published' && (
+                            <button
+                              onClick={() => updateStatus(post.id, 'draft')}
+                              disabled={!!isLoading}
+                              className="text-xs font-medium px-2 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            >
+                              Dépublier
+                            </button>
+                          )}
+                          {post.status === 'draft' && (
+                            <button
+                              onClick={() => updateStatus(post.id, 'published')}
+                              disabled={!!isLoading}
+                              className="text-xs font-medium px-2 py-1 rounded-lg text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
+                            >
+                              Publier
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deletePost(post.id)}
+                            disabled={!!isLoading}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-brown/30 hover:text-red-600 transition-colors disabled:opacity-50"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,23 +1,39 @@
 import React from 'react'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { CASES } from '@/lib/constants'
 
 export const metadata: Metadata = {
   title: 'Blog',
   description:
-    'Conseils, guides et inspirations de la communauté Talents d\'Afrique — coiffure, cuisine, maison, couture et plus encore.',
+    "Conseils, guides et inspirations de la communauté Talents d'Afrique — coiffure, cuisine, maison, couture et plus encore.",
 }
 
-// ─── Mock blog posts ──────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const MOCK_POSTS = [
+interface BlogPost {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  cover_image: string | null
+  tags: string[]
+  case_slug: string | null
+  author_name: string
+  published_at: string | null
+}
+
+// ─── Mock blog posts (fallback) ───────────────────────────────────────────────
+
+const MOCK_POSTS: BlogPost[] = [
   {
     id: '1',
     slug: 'comment-entretenir-ses-locks',
     title: 'Comment entretenir ses locks : le guide complet',
     excerpt:
-      'Les locks demandent une attention particulière pour rester belles et saines. De l\'hydratation au twist, découvrez toutes nos astuces pour prendre soin de vos locks au quotidien.',
+      "Les locks demandent une attention particulière pour rester belles et saines. De l'hydratation au twist, découvrez toutes nos astuces pour prendre soin de vos locks au quotidien.",
     cover_image: 'https://picsum.photos/seed/locks/800/450',
     tags: ['coiffure', 'locks', 'entretien', 'beauté'],
     case_slug: 'beaute',
@@ -29,7 +45,7 @@ const MOCK_POSTS = [
     slug: 'monter-meubles-ikea-paris',
     title: 'Monter ses meubles IKEA : nos talents disponibles ce week-end à Paris',
     excerpt:
-      'Vous avez acheté votre nouveau PAX ou votre KALLAX et vous ne savez pas par où commencer ? Nos talents de la Case Maison sont là pour vous aider, disponibles dès ce samedi.',
+      "Vous avez acheté votre nouveau PAX ou votre KALLAX et vous ne savez pas par où commencer ? Nos talents de la Case Maison sont là pour vous aider, disponibles dès ce samedi.",
     cover_image: 'https://picsum.photos/seed/ikea/800/450',
     tags: ['montage', 'IKEA', 'Paris', 'maison'],
     case_slug: 'maison',
@@ -51,9 +67,9 @@ const MOCK_POSTS = [
   {
     id: '4',
     slug: 'kory-inspire-cauri-monnaie-africaine',
-    title: 'Pourquoi le Kory s\'inspire du Cauri, l\'ancienne monnaie africaine',
+    title: "Pourquoi le Kory s'inspire du Cauri, l'ancienne monnaie africaine",
     excerpt:
-      'Le Cauri a été utilisé comme monnaie d\'échange en Afrique pendant des siècles. En créant le Kory, Talents d\'Afrique rend hommage à cet héritage tout en construisant une économie communautaire moderne.',
+      "Le Cauri a été utilisé comme monnaie d'échange en Afrique pendant des siècles. En créant le Kory, Talents d'Afrique rend hommage à cet héritage tout en construisant une économie communautaire moderne.",
     cover_image: 'https://picsum.photos/seed/cauri/800/450',
     tags: ['kory', 'cauri', 'économie', 'diaspora', 'histoire'],
     case_slug: null,
@@ -77,7 +93,7 @@ const MOCK_POSTS = [
     slug: 'diaspora-camerounaise-lyon-talents',
     title: 'La diaspora camerounaise à Lyon : les talents qui cartonnent',
     excerpt:
-      'Lyon abrite une communauté camerounaise dynamique et créative. Rencontre avec cinq talents de la ville qui ont transformé leur passion en activité grâce à Talents d\'Afrique.',
+      "Lyon abrite une communauté camerounaise dynamique et créative. Rencontre avec cinq talents de la ville qui ont transformé leur passion en activité grâce à Talents d'Afrique.",
     cover_image: 'https://picsum.photos/seed/lyon/800/450',
     tags: ['Lyon', 'Cameroun', 'diaspora', 'communauté'],
     case_slug: null,
@@ -109,15 +125,15 @@ function formatDate(iso: string) {
   })
 }
 
-function readingTime(excerpt: string): string {
-  const words = excerpt.split(' ').length * 12 // approximate full article
+function readingTime(excerpt: string | null): string {
+  const words = (excerpt ?? '').split(' ').length * 12
   const minutes = Math.ceil(words / 200)
   return `${minutes} min`
 }
 
 // ─── Blog Card ────────────────────────────────────────────────────────────────
 
-function BlogCard({ post }: { post: (typeof MOCK_POSTS)[0] }) {
+function BlogCard({ post }: { post: BlogPost }) {
   const caseData = post.case_slug
     ? CASES.find((c) => c.slug === post.case_slug)
     : null
@@ -125,19 +141,23 @@ function BlogCard({ post }: { post: (typeof MOCK_POSTS)[0] }) {
   return (
     <article className="bg-white rounded-2xl border border-brown/10 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
       <Link href={`/blog/${post.slug}`} className="block overflow-hidden">
-        {/* Cover image */}
         <div className="aspect-video overflow-hidden bg-brown/5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={post.cover_image}
-            alt={post.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          {post.cover_image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.cover_image}
+              alt={post.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+              <span className="text-3xl">{caseData?.icon ?? '📝'}</span>
+            </div>
+          )}
         </div>
       </Link>
 
       <div className="p-5 flex flex-col flex-1">
-        {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mb-3">
           {caseData && (
             <span
@@ -156,19 +176,16 @@ function BlogCard({ post }: { post: (typeof MOCK_POSTS)[0] }) {
           ))}
         </div>
 
-        {/* Title */}
         <Link href={`/blog/${post.slug}`}>
           <h2 className="font-bold text-brown text-lg leading-snug font-playfair mb-2 hover:text-primary transition-colors line-clamp-2">
             {post.title}
           </h2>
         </Link>
 
-        {/* Excerpt */}
         <p className="text-sm text-brown/60 leading-relaxed line-clamp-3 mb-4 flex-1">
           {post.excerpt}
         </p>
 
-        {/* Meta */}
         <div className="flex items-center justify-between pt-3 border-t border-brown/8">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
@@ -177,7 +194,8 @@ function BlogCard({ post }: { post: (typeof MOCK_POSTS)[0] }) {
             <div>
               <p className="text-xs font-medium text-brown">{post.author_name}</p>
               <p className="text-xs text-brown/40">
-                {formatDate(post.published_at)} · {readingTime(post.excerpt)}
+                {post.published_at ? formatDate(post.published_at) : ''} ·{' '}
+                {readingTime(post.excerpt)}
               </p>
             </div>
           </div>
@@ -195,7 +213,44 @@ function BlogCard({ post }: { post: (typeof MOCK_POSTS)[0] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function BlogPage() {
+export default async function BlogPage() {
+  // Fetch from Supabase
+  let posts: BlogPost[] = []
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: () => {},
+        },
+      }
+    )
+    const { data } = await supabase
+      .from('blog_posts')
+      .select(
+        'id, slug, title, excerpt, cover_image, tags, case_slug, author_name, published_at'
+      )
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(30)
+
+    if (data && data.length > 0) {
+      posts = data as BlogPost[]
+    } else {
+      posts = MOCK_POSTS
+    }
+  } catch {
+    posts = MOCK_POSTS
+  }
+
+  const caseCounts = CASES.slice(0, 5).map((c) => ({
+    ...c,
+    count: posts.filter((p) => p.case_slug === c.slug).length,
+  }))
+
   return (
     <div className="min-h-screen bg-cream">
       {/* Hero */}
@@ -207,9 +262,16 @@ export default function BlogPage() {
           <h1 className="text-4xl md:text-5xl font-bold font-playfair mb-4">
             Le Blog de la Communauté
           </h1>
-          <p className="text-white/70 text-lg max-w-xl mx-auto leading-relaxed">
-            Conseils, recettes, guides et histoires de notre communauté. Partageons nos savoirs, nos talents, et notre culture.
+          <p className="text-white/70 text-lg max-w-xl mx-auto leading-relaxed mb-6">
+            Conseils, recettes, guides et histoires de notre communauté.
+            Partageons nos savoirs, nos talents, et notre culture.
           </p>
+          <Link
+            href="/blog/soumettre"
+            className="inline-flex items-center gap-2 bg-primary text-white font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors text-sm"
+          >
+            ✍️ Proposer un article
+          </Link>
         </div>
       </section>
 
@@ -218,7 +280,7 @@ export default function BlogPage() {
           {/* Articles grid */}
           <main className="flex-1 min-w-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {MOCK_POSTS.map((post) => (
+              {posts.map((post) => (
                 <BlogCard key={post.id} post={post} />
               ))}
             </div>
@@ -226,6 +288,22 @@ export default function BlogPage() {
 
           {/* Sidebar (desktop only) */}
           <aside className="w-64 shrink-0 hidden lg:flex flex-col gap-6">
+            {/* Propose article CTA */}
+            <div className="bg-primary rounded-xl p-5 text-white">
+              <p className="font-semibold mb-1 text-sm">
+                Partagez votre expertise !
+              </p>
+              <p className="text-xs text-white/70 mb-3">
+                Soumettez un article et gagnez 10 Korys si il est accepté.
+              </p>
+              <Link
+                href="/blog/soumettre"
+                className="inline-flex text-xs font-medium bg-white text-primary px-3 py-1.5 rounded-lg hover:bg-white/90 transition-colors"
+              >
+                Proposer un article →
+              </Link>
+            </div>
+
             {/* Popular tags */}
             <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
               <h3 className="font-semibold text-brown mb-4 text-sm uppercase tracking-wide">
@@ -249,24 +327,19 @@ export default function BlogPage() {
                 Par Case
               </h3>
               <div className="flex flex-col gap-2">
-                {CASES.slice(0, 5).map((c) => {
-                  const count = MOCK_POSTS.filter(
-                    (p) => p.case_slug === c.slug
-                  ).length
-                  return (
-                    <div
-                      key={c.slug}
-                      className="flex items-center justify-between py-1.5"
-                    >
-                      <span className="flex items-center gap-2 text-sm text-brown/70">
-                        {c.icon} {c.label}
-                      </span>
-                      <span className="text-xs font-medium text-brown/40 bg-brown/5 px-2 py-0.5 rounded-full">
-                        {count}
-                      </span>
-                    </div>
-                  )
-                })}
+                {caseCounts.map((c) => (
+                  <div
+                    key={c.slug}
+                    className="flex items-center justify-between py-1.5"
+                  >
+                    <span className="flex items-center gap-2 text-sm text-brown/70">
+                      {c.icon} {c.label}
+                    </span>
+                    <span className="text-xs font-medium text-brown/40 bg-brown/5 px-2 py-0.5 rounded-full">
+                      {c.count}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea, Select } from '@/components/ui/Input'
 import { CASES } from '@/lib/constants'
@@ -8,6 +9,7 @@ import { slugify } from '@/lib/utils'
 import { Save, Globe, Tag, X } from 'lucide-react'
 
 export default function NouvelArticlePage() {
+  const router = useRouter()
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
@@ -21,6 +23,7 @@ export default function NouvelArticlePage() {
   const [published, setPublished] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Auto-generate slug from title unless user has manually edited it
   useEffect(() => {
@@ -54,12 +57,37 @@ export default function NouvelArticlePage() {
   }
 
   async function handleSave(publish: boolean) {
+    if (!title || !content) return
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    setSaving(false)
-    if (publish) setPublished(true)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setSaveError(null)
+    try {
+      const res = await fetch('/api/blog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          slug: slug || slugify(title),
+          excerpt: excerpt || undefined,
+          content_md: content,
+          cover_image: coverImage || undefined,
+          tags,
+          case_slug: caseSlug || undefined,
+          status: publish ? 'published' : 'draft',
+        }),
+      })
+      const data = await res.json() as { post?: { id: string }; error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Erreur inconnue')
+      if (publish) {
+        router.push('/admin')
+      } else {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2500)
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const caseOptions = [
@@ -83,9 +111,10 @@ export default function NouvelArticlePage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {saved && (
-              <span className="text-xs text-green-600 font-medium">
-                Sauvegardé ✓
-              </span>
+              <span className="text-xs text-green-600 font-medium">Sauvegardé ✓</span>
+            )}
+            {saveError && (
+              <span className="text-xs text-red-600 max-w-48 truncate">{saveError}</span>
             )}
             <Button
               variant="outline"
