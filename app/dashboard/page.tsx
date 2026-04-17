@@ -457,6 +457,7 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
   const [photos, setPhotos] = useState<string[]>(profile.photos ?? [])
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
   // Talent section state
   const [caseSlug, setCaseSlug] = useState(profile.case_slug ?? '')
   const [subServices, setSubServices] = useState<string[]>(profile.sub_services ?? [])
@@ -475,16 +476,27 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
 
   async function handleAvatarUpload(file: File) {
     setAvatarUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('type', 'avatar')
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    const data = await res.json()
-    if (data.avatar_url) {
-      setAvatarUrl(data.avatar_url)
-      await refreshProfile()
+    setAvatarError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('type', 'avatar')
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setAvatarError(errData.error ?? 'Échec du téléchargement. Veuillez réessayer.')
+        return
+      }
+      const data = await res.json()
+      if (data.avatar_url) {
+        setAvatarUrl(data.avatar_url)
+        await refreshProfile()
+      }
+    } catch {
+      setAvatarError('Erreur réseau. Vérifiez votre connexion et réessayez.')
+    } finally {
+      setAvatarUploading(false)
     }
-    setAvatarUploading(false)
   }
 
   async function handleSave() {
@@ -519,21 +531,24 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
       <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
         <h3 className="font-semibold text-brown mb-4">Informations personnelles</h3>
         <div className="flex items-center gap-4 mb-5">
-          <div className="relative">
-            <Avatar src={avatarUrl} name={profile.name} size="xl" />
-            <label className={`absolute -bottom-1 -right-1 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors shadow-sm cursor-pointer ${avatarUploading ? 'opacity-60 pointer-events-none' : ''}`}>
-              {avatarUploading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Camera className="w-3.5 h-3.5" />
-              )}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = '' }}
-              />
-            </label>
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative">
+              <Avatar src={avatarUrl} name={profile.name} size="xl" />
+              <label className={`absolute -bottom-1 -right-1 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors shadow-sm cursor-pointer ${avatarUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {avatarUploading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = '' }}
+                />
+              </label>
+            </div>
+            {avatarError && <p className="text-xs text-red-600 mt-1 max-w-[100px] text-center">{avatarError}</p>}
           </div>
           <div>
             <p className="font-medium text-brown">{profile.name}</p>

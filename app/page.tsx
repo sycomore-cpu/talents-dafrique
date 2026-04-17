@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { CaseGrid } from '@/components/cases/CaseGrid'
+import { createClient } from '@/lib/supabase/server'
+import type { Profile } from '@/lib/supabase/types'
 
 // ─── Stats Bar ───────────────────────────────────────────────────────────────
 
@@ -337,11 +339,94 @@ function FooterCTA() {
   )
 }
 
+// ─── Welcome Banner (logged-in) ───────────────────────────────────────────────
+
+function WelcomeBanner({ profile, reservationCount }: { profile: Profile; reservationCount: number }) {
+  const firstName = profile.name.split(' ')[0]
+  return (
+    <section className="bg-primary/8 border-b border-primary/15 py-5 px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold font-heading text-brown">
+              Bonjour, {firstName} 👋
+            </h2>
+            <div className="flex items-center gap-4 mt-1.5 text-sm text-brown/60">
+              <span className="flex items-center gap-1">
+                <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" fill="#E8B820" />
+                  <text x="12" y="16.5" textAnchor="middle" fontSize="10" fontWeight="700" fill="#1A0E06" fontFamily="serif">K</text>
+                </svg>
+                <span className="font-medium text-brown">{profile.kory_balance}</span> Korys
+              </span>
+              <span className="w-px h-4 bg-brown/15" aria-hidden="true" />
+              <span>
+                <span className="font-medium text-brown">{reservationCount}</span> réservation{reservationCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              Mon tableau de bord
+            </Link>
+            <Link
+              href="/profil"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-brown/15 text-brown text-sm font-medium hover:bg-cream transition-colors"
+            >
+              Mon profil
+            </Link>
+            <Link
+              href="/cases/beaute"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-brown/15 text-brown text-sm font-medium hover:bg-cream transition-colors"
+            >
+              Explorer les talents
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function HomePage() {
+export default async function HomePage() {
+  let loggedInProfile: Profile | null = null
+  let reservationCount = 0
+
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      if (profile) {
+        loggedInProfile = profile as Profile
+        const { count } = await supabase
+          .from('reservations')
+          .select('id', { count: 'exact', head: true })
+          .or(`client_id.eq.${user.id},talent_id.eq.${user.id}`)
+        reservationCount = count ?? 0
+      }
+    }
+  } catch {
+    // Gracefully fall back to non-logged-in view
+    loggedInProfile = null
+  }
+
   return (
     <>
+      {/* Personalized welcome banner for logged-in users */}
+      {loggedInProfile && (
+        <WelcomeBanner profile={loggedInProfile} reservationCount={reservationCount} />
+      )}
+
       {/* Hero Section */}
       <section
         className="relative overflow-hidden adinkra-bg py-20 sm:py-28"
@@ -380,11 +465,17 @@ export default function HomePage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button href="/cases/beaute" size="lg">
-              Découvrir les talents
+              Trouver un talent
             </Button>
-            <Button href="/inscription" variant="outline" size="lg">
-              Partager le mien
-            </Button>
+            {loggedInProfile ? (
+              <Button href="/dashboard" variant="outline" size="lg">
+                Mon espace →
+              </Button>
+            ) : (
+              <Button href="/inscription" variant="outline" size="lg">
+                Partager mon talent
+              </Button>
+            )}
           </div>
 
           <StatsBar />

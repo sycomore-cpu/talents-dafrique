@@ -108,10 +108,28 @@ function ShieldIcon({ active }: { active: boolean }) {
   )
 }
 
-const navItems: NavItem[] = [
+function PlusIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-6 h-6"
+      fill="none"
+      stroke={active ? '#C8920A' : 'currentColor'}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  )
+}
+
+const staticNavItems: NavItem[] = [
   {
     href: '/',
-    label: 'Accueil',
+    label: '🏠 Accueil',
     matchPaths: ['/'],
     icon: (active) => <HomeIcon active={active} />,
   },
@@ -120,12 +138,6 @@ const navItems: NavItem[] = [
     label: 'Explorer',
     matchPaths: ['/cases'],
     icon: (active) => <GridIcon active={active} />,
-  },
-  {
-    href: '/profil',
-    label: 'Mon profil',
-    matchPaths: ['/profil', '/dashboard'],
-    icon: (active) => <UserIcon active={active} />,
   },
   {
     href: '/admin',
@@ -140,9 +152,32 @@ export function MobileNav() {
   const pathname = usePathname()
   const { profile } = useAuth()
 
-  const visibleItems = navItems.filter(
-    (item) => !item.adminOnly || profile?.is_admin
-  )
+  // Auth-aware dynamic items
+  const proposerHref = profile ? '/dashboard?tab=profil' : '/inscription'
+  const proposerLabel = profile ? 'Mon espace' : 'Proposer'
+
+  const profilHref = profile ? '/dashboard' : '/connexion'
+  const profilLabel = profile ? (profile.name.split(' ')[0]) : 'Connexion'
+
+  const dynamicItems: NavItem[] = [
+    {
+      href: proposerHref,
+      label: proposerLabel,
+      matchPaths: profile ? ['/dashboard'] : ['/inscription'],
+      icon: (active) => <PlusIcon active={active} />,
+    },
+    {
+      href: profilHref,
+      label: profilLabel,
+      matchPaths: profile ? ['/profil', '/dashboard'] : ['/connexion'],
+      icon: (active) => <UserIcon active={active} />,
+    },
+  ]
+
+  const visibleItems = [
+    ...staticNavItems.filter((item) => !item.adminOnly || profile?.is_admin),
+    ...dynamicItems,
+  ]
 
   function isActive(item: NavItem): boolean {
     if (!pathname) return false
@@ -160,6 +195,18 @@ export function MobileNav() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Navigation mobile"
     >
+      {/* Logged-in user identity bar */}
+      {profile && (
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 px-4 py-2 border-b border-brown/8 bg-primary/5 hover:bg-primary/10 transition-colors"
+        >
+          <span className="text-xs font-semibold text-primary truncate">
+            {profile.name}
+          </span>
+          <span className="ml-auto text-[10px] text-brown/50 shrink-0">Tableau de bord →</span>
+        </Link>
+      )}
       <div className="flex items-stretch">
         {visibleItems.map((item) => {
           const active = isActive(item)
