@@ -741,13 +741,18 @@ function InscriptionInner() {
 
     const urlStep = parseInt(searchParams.get('step') ?? '1')
 
-    // Utilisateur avec profil déjà complété → dashboard directement
-    if (profile?.name) {
+    // Utilisateur créé il y a moins de 5 minutes = nouvelle inscription OAuth
+    const isNewAccount = user.created_at
+      ? Date.now() - new Date(user.created_at).getTime() < 5 * 60 * 1000
+      : false
+
+    // Utilisateur existant avec profil → dashboard (sauf si vraiment nouveau)
+    if (profile?.name && !isNewAccount) {
       router.replace('/dashboard')
       return
     }
 
-    // Nouvel utilisateur (pas encore de profil complet) → étape 2
+    // Nouvel utilisateur (ou nouveau compte) + step=2 → étape 2
     if (urlStep >= 2) {
       setEmail(user.email ?? '')
       setStep(2)

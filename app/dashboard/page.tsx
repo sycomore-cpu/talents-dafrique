@@ -154,14 +154,53 @@ function ReservationCard({
 
 function ReviewModal({
   name,
+  reservationId,
+  talentId,
+  reviewerId,
   onClose,
 }: {
   name: string
+  reservationId: string
+  talentId: string
+  reviewerId: string
   onClose: () => void
 }) {
+  const supabase = createClient()
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    if (rating === 0) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      // Insérer l'avis dans la table reviews
+      const { error: reviewErr } = await supabase.from('reviews').insert({
+        reviewer_id: reviewerId,
+        talent_id: talentId,
+        reservation_id: reservationId,
+        rating,
+        comment: comment || null,
+      })
+      if (reviewErr) throw reviewErr
+
+      // Marquer la réservation comme terminée
+      await fetch('/api/reservations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reservationId, action: 'complete' }),
+      })
+
+      setSubmitted(true)
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Erreur lors de la publication')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   if (submitted) {
     return (
@@ -209,11 +248,17 @@ function ReviewModal({
             placeholder="Partagez votre expérience..."
             rows={4}
           />
+          {submitError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {submitError}
+            </p>
+          )}
           <Button
             variant="primary"
             fullWidth
-            disabled={rating === 0}
-            onClick={() => setSubmitted(true)}
+            disabled={rating === 0 || submitting}
+            isLoading={submitting}
+            onClick={handleSubmit}
           >
             Publier l&apos;avis
           </Button>
@@ -232,39 +277,55 @@ type ReservationRow = {
   requested_time: string
   status: ReservationStatus
   contact_revealed: boolean
+  talent_id?: string
   talent?: { name: string; avatar_url: string | null; whatsapp: string | null }
   client?: { name: string; avatar_url: string | null }
 }
 
+type ReviewTarget = { reservationId: string; talentId: string; name: string }
+
 function ReservationsTab({ userId }: { userId: string }) {
   const supabase = createClient()
   const [subTab, setSubTab] = useState<'client' | 'talent'>('client')
-  const [reviewTarget, setReviewTarget] = useState<string | null>(null)
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
   const [clientReservations, setClientReservations] = useState<ReservationRow[]>([])
   const [talentReservations, setTalentReservations] = useState<ReservationRow[]>([])
   const [loadingRes, setLoadingRes] = useState(true)
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
+
+  async function loadReservations() {
+    const [clientRes, talentRes] = await Promise.all([
+      supabase
+        .from('reservations')
+        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, talent:profiles!talent_id(name, avatar_url, whatsapp)')
+        .eq('client_id', userId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('reservations')
+        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, client:profiles!client_id(name, avatar_url)')
+        .eq('talent_id', userId)
+        .order('created_at', { ascending: false }),
+    ])
+    setClientReservations((clientRes.data ?? []) as unknown as ReservationRow[])
+    setTalentReservations((talentRes.data ?? []) as unknown as ReservationRow[])
+    setLoadingRes(false)
+  }
 
   useEffect(() => {
-    async function load() {
-      const [clientRes, talentRes] = await Promise.all([
-        supabase
-          .from('reservations')
-          .select('id, service, requested_date, requested_time, status, contact_revealed, talent:profiles!talent_id(name, avatar_url, whatsapp)')
-          .eq('client_id', userId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('reservations')
-          .select('id, service, requested_date, requested_time, status, contact_revealed, client:profiles!client_id(name, avatar_url)')
-          .eq('talent_id', userId)
-          .order('created_at', { ascending: false }),
-      ])
-      setClientReservations((clientRes.data ?? []) as unknown as ReservationRow[])
-      setTalentReservations((talentRes.data ?? []) as unknown as ReservationRow[])
-      setLoadingRes(false)
-    }
-    load()
+    loadReservations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
+
+  async function handleAction(reservationId: string, action: 'accept' | 'refuse') {
+    setActionLoading((prev) => ({ ...prev, [reservationId]: true }))
+    await fetch('/api/reservations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: reservationId, action }),
+    })
+    await loadReservations()
+    setActionLoading((prev) => ({ ...prev, [reservationId]: false }))
+  }
 
   if (loadingRes) return (
     <div className="flex justify-center py-12">
@@ -312,7 +373,11 @@ function ReservationsTab({ userId }: { userId: string }) {
               status={r.status}
               whatsapp={r.talent?.whatsapp ?? ''}
               hasReview={false}
-              onLeaveReview={() => setReviewTarget(r.talent?.name ?? null)}
+              onLeaveReview={() => r.talent_id && setReviewTarget({
+                reservationId: r.id,
+                talentId: r.talent_id,
+                name: r.talent?.name ?? '—',
+              })}
             />
           ))}
         </div>
@@ -323,26 +388,54 @@ function ReservationsTab({ userId }: { userId: string }) {
           {talentReservations.length === 0 ? (
             <p className="text-brown/50 text-sm py-6 text-center">Aucune demande reçue pour l&apos;instant.</p>
           ) : talentReservations.map((r) => (
-            <ReservationCard
-              key={r.id}
-              name={r.client?.name ?? '—'}
-              avatar={r.client?.avatar_url ?? null}
-              service={r.service}
-              date={r.requested_date}
-              time={r.requested_time}
-              status={r.status}
-              whatsapp=""
-              hasReview={false}
-              onLeaveReview={() => setReviewTarget(r.client?.name ?? null)}
-            />
+            <div key={r.id} className="flex flex-col gap-2">
+              <ReservationCard
+                name={r.client?.name ?? '—'}
+                avatar={r.client?.avatar_url ?? null}
+                service={r.service}
+                date={r.requested_date}
+                time={r.requested_time}
+                status={r.status}
+                whatsapp=""
+                hasReview={false}
+                onLeaveReview={() => {}}
+              />
+              {r.status === 'pending' && (
+                <div className="flex gap-2 px-4 pb-3 -mt-1">
+                  <button
+                    disabled={actionLoading[r.id]}
+                    onClick={() => handleAction(r.id, 'accept')}
+                    className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading[r.id] ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    Accepter (−1 Kory)
+                  </button>
+                  <button
+                    disabled={actionLoading[r.id]}
+                    onClick={() => handleAction(r.id, 'refuse')}
+                    className="flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Refuser
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
 
       {reviewTarget && (
         <ReviewModal
-          name={reviewTarget}
-          onClose={() => setReviewTarget(null)}
+          name={reviewTarget.name}
+          reservationId={reviewTarget.reservationId}
+          talentId={reviewTarget.talentId}
+          reviewerId={userId}
+          onClose={() => { setReviewTarget(null); loadReservations() }}
         />
       )}
     </div>
