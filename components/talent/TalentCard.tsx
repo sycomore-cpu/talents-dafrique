@@ -48,11 +48,9 @@ export function TalentCard({ talent, className }: TalentCardProps) {
   const talentSlug = getTalentSlug(talent)
   // Les IDs mock (ex: "mock-beaute-1") n'ont pas de vraie page — on désactive
   const isMock = talent.id.startsWith('mock-')
-  const profileHref = isMock
+  const profileHref = isMock || !caseData
     ? null
-    : caseData
-    ? `/cases/${caseData.slug}/${talentSlug}`
-    : `/talent/${talentSlug}`
+    : `/cases/${caseData.slug}/${talentSlug}`
 
   const availableDays = getAvailableDays(talent.availability ?? {})
   const weekendDays = availableDays.filter(

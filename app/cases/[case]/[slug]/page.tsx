@@ -194,19 +194,22 @@ async function findTalentBySlugFromDb(caseSlug: string, slug: string): Promise<M
   try {
     const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
-    // Extract ID prefix from slug (last 6 chars after last dash)
+    // Extract ID prefix from slug (last segment after last dash)
     const parts = slug.split('-')
     const idPrefix = parts[parts.length - 1]
     if (!idPrefix || idPrefix.length < 4) return null
+
+    // Fetch all talents of the case and filter in JS — ilike on UUID columns is unreliable
     const { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('case_slug', caseSlug)
       .eq('is_talent', true)
-      .ilike('id', `${idPrefix}%`)
-      .single()
+
     if (!data) return null
-    return { ...(data as unknown as Profile), average_rating: (data as Record<string, unknown>).trust_score as number ?? 0 } as MockProfile
+    const match = data.find((t) => (t.id as string).startsWith(idPrefix))
+    if (!match) return null
+    return { ...(match as unknown as Profile), average_rating: (match as Record<string, unknown>).trust_score as number ?? 0 } as MockProfile
   } catch {
     return null
   }

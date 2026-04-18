@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { Input, Textarea, Select } from '@/components/ui/Input'
@@ -43,7 +42,6 @@ export default function ReserverPage({
 }) {
   const { talentId } = React.use(params)
   const { user, loading } = useAuth()
-  const router = useRouter()
   const supabase = createClient()
 
   const [talent, setTalent] = useState<Profile | null>(null)
