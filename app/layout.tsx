@@ -36,7 +36,17 @@ export const metadata: Metadata = {
     description:
       'La communauté des talents de la diaspora africaine en France.',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Talents d'Afrique",
+    description: 'La communauté des talents de la diaspora africaine en France.',
+  },
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/logo.svg', type: 'image/svg+xml' },
+    ],
+  },
 }
 
 export const viewport: Viewport = {

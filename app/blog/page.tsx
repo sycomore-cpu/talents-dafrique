@@ -9,6 +9,16 @@ export const metadata: Metadata = {
   title: 'Blog',
   description:
     "Conseils, guides et inspirations de la communauté Talents d'Afrique — coiffure, cuisine, maison, couture et plus encore.",
+  openGraph: {
+    title: "Blog — Talents d'Afrique",
+    description: "Conseils, guides et inspirations de la communauté Talents d'Afrique.",
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Blog — Talents d'Afrique",
+    description: "Conseils, guides et inspirations de la communauté Talents d'Afrique.",
+  },
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

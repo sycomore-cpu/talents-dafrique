@@ -22,6 +22,7 @@ import {
   X,
   TrendingUp,
   Loader2,
+  Share2,
 } from 'lucide-react'
 import { usePhotoUpload } from '@/lib/usePhotoUpload'
 import { createClient } from '@/lib/supabase/client'
@@ -474,6 +475,22 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
     setTimeout(() => setCopied(false), 2000)
   }
 
+  async function shareCode() {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talentsdafrique.com'
+    const text = `Rejoins Talents d'Afrique, la communauté des talents de la diaspora africaine 🌍✨\n\nUtilise mon code de parrainage pour t'inscrire et reçois des Korys en cadeau !\n\n🎁 Code : ${profile.parrain_code}\n👉 ${siteUrl}/inscription?parrain=${profile.parrain_code}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Talents d'Afrique", text })
+      } catch {
+        // user cancelled
+      }
+    } else {
+      navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   async function handleAvatarUpload(file: File) {
     setAvatarUploading(true)
     setAvatarError(null)
@@ -765,6 +782,13 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
               </>
             )}
           </button>
+          <button
+            onClick={shareCode}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium"
+          >
+            <Share2 className="w-4 h-4" />
+            Inviter
+          </button>
         </div>
       </div>
 
@@ -1022,6 +1046,25 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* CTA for incomplete talent profiles */}
+        {activeTab === 'reservations' && profile.is_talent && !profile.bio && (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-brown">
+                ✍️ Complétez votre profil de talent
+              </p>
+              <p className="text-xs text-brown/60 mt-0.5">
+                Ajoutez vos services, disponibilités et photos pour être visible par les clients.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('profil')}
+              className="shrink-0 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Modifier →
+            </button>
+          </div>
+        )}
         {activeTab === 'reservations' && <ReservationsTab userId={user.id} />}
         {activeTab === 'profil' && <ProfileTab profile={profile} />}
         {activeTab === 'korys' && <KorysTab balance={profile.kory_balance} userId={user.id} />}
