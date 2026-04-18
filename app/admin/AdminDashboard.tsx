@@ -18,7 +18,6 @@ import {
   TrendingUp,
   TriangleAlert,
   CirclePlus,
-  Pencil,
   Trash2,
   Eye,
   Loader2,
@@ -66,31 +65,6 @@ interface Stats {
   korysDistribues: number | string
 }
 
-// ─── Mock Blog Data (blog pas encore connecté à Supabase) ──────────────────────
-
-const MOCK_BLOG_POSTS = [
-  {
-    id: 'b1',
-    title: 'Comment entretenir ses locks : le guide complet',
-    case: 'Case Beauté',
-    published: true,
-    date: '2026-04-01',
-  },
-  {
-    id: 'b2',
-    title: 'Monter ses meubles IKEA : nos talents disponibles ce week-end à Paris',
-    case: 'Case Maison',
-    published: true,
-    date: '2026-04-05',
-  },
-  {
-    id: 'b3',
-    title: "Pourquoi le Kory s'inspire du Cauri, l'ancienne monnaie africaine",
-    case: null,
-    published: false,
-    date: '2026-04-10',
-  },
-]
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
@@ -634,46 +608,43 @@ function ModerationTab() {
 
 // ─── Blog Tab ─────────────────────────────────────────────────────────────────
 
-type BlogStatus = 'draft' | 'pending' | 'published' | 'rejected'
-
-interface BlogPost {
+interface AdminBlogPost {
   id: string
   title: string
   slug: string
   case_slug: string | null
-  status: BlogStatus
-  author_name: string
+  published: boolean
+  author: { name: string | null } | null
   published_at: string | null
   created_at: string
 }
 
-const STATUS_LABELS: Record<BlogStatus, { label: string; className: string }> = {
-  published: { label: 'Publié', className: 'bg-green-50 text-green-700 border-green-200' },
-  pending:   { label: 'En attente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  draft:     { label: 'Brouillon', className: 'bg-gray-100 text-gray-500 border-gray-200' },
-  rejected:  { label: 'Refusé', className: 'bg-red-50 text-red-600 border-red-200' },
+function blogStatusLabel(published: boolean): { label: string; className: string } {
+  return published
+    ? { label: 'Publié', className: 'bg-green-50 text-green-700 border-green-200' }
+    : { label: 'En attente', className: 'bg-amber-50 text-amber-700 border-amber-200' }
 }
 
 function BlogTab() {
   const supabase = createClient()
-  const [posts, setPosts] = useState<BlogPost[]>([])
+  const [posts, setPosts] = useState<AdminBlogPost[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
       .from('blog_posts')
-      .select('id, title, slug, case_slug, status, author_name, published_at, created_at')
+      .select('id, title, slug, case_slug, published, author:profiles!author_id(name), published_at, created_at')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        setPosts((data as BlogPost[]) ?? [])
+        setPosts((data as AdminBlogPost[]) ?? [])
         setLoading(false)
       })
   }, [supabase])
 
-  const pendingCount = posts.filter((p) => p.status === 'pending').length
+  const pendingCount = posts.filter((p) => !p.published).length
 
-  async function updateStatus(id: string, status: BlogStatus) {
+  async function updateStatus(id: string, status: 'published' | 'draft') {
     setActionLoading(id + status)
     const res = await fetch(`/api/blog/${id}`, {
       method: 'PATCH',
@@ -681,7 +652,7 @@ function BlogTab() {
       body: JSON.stringify({ status }),
     })
     if (res.ok) {
-      setPosts((prev) => prev.map((p) => p.id === id ? { ...p, status } : p))
+      setPosts((prev) => prev.map((p) => p.id === id ? { ...p, published: status === 'published' } : p))
     }
     setActionLoading(null)
   }
@@ -737,14 +708,15 @@ function BlogTab() {
               </thead>
               <tbody className="divide-y divide-brown/6">
                 {posts.map((post) => {
-                  const s = STATUS_LABELS[post.status]
+                  const s = blogStatusLabel(post.published)
                   const isLoading = actionLoading?.startsWith(post.id)
+                  const authorName = post.author?.name ?? "Talents d'Afrique"
                   return (
-                    <tr key={post.id} className={`hover:bg-brown/2 transition-colors ${post.status === 'pending' ? 'bg-amber-50/30' : ''}`}>
+                    <tr key={post.id} className={`hover:bg-brown/2 transition-colors ${!post.published ? 'bg-amber-50/30' : ''}`}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-brown line-clamp-1 max-w-[200px]">{post.title}</p>
                       </td>
-                      <td className="px-4 py-3 text-brown/60 text-xs">{post.author_name}</td>
+                      <td className="px-4 py-3 text-brown/60 text-xs">{authorName}</td>
                       <td className="px-4 py-3 text-brown/60">{post.case_slug ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full text-xs font-medium px-2 py-0.5 border ${s.className}`}>
@@ -765,40 +737,22 @@ function BlogTab() {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </a>
-                          {post.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => updateStatus(post.id, 'published')}
-                                disabled={!!isLoading}
-                                className="text-xs font-medium px-2 py-1 rounded-lg text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
-                              >
-                                ✓ Approuver
-                              </button>
-                              <button
-                                onClick={() => updateStatus(post.id, 'rejected')}
-                                disabled={!!isLoading}
-                                className="text-xs font-medium px-2 py-1 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
-                              >
-                                Refuser
-                              </button>
-                            </>
+                          {!post.published && (
+                            <button
+                              onClick={() => updateStatus(post.id, 'published')}
+                              disabled={!!isLoading}
+                              className="text-xs font-medium px-2 py-1 rounded-lg text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
+                            >
+                              ✓ Approuver
+                            </button>
                           )}
-                          {post.status === 'published' && (
+                          {post.published && (
                             <button
                               onClick={() => updateStatus(post.id, 'draft')}
                               disabled={!!isLoading}
                               className="text-xs font-medium px-2 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-50"
                             >
                               Dépublier
-                            </button>
-                          )}
-                          {post.status === 'draft' && (
-                            <button
-                              onClick={() => updateStatus(post.id, 'published')}
-                              disabled={!!isLoading}
-                              className="text-xs font-medium px-2 py-1 rounded-lg text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
-                            >
-                              Publier
                             </button>
                           )}
                           <button

@@ -18,7 +18,9 @@ interface BlogPost {
   tags: string[]
   case_slug: string | null
   author_name: string
+  published: boolean
   published_at: string | null
+  content: string | null
   content_md: string | null
   content_html?: string
 }
@@ -36,7 +38,9 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['coiffure', 'locks', 'entretien', 'beauté'],
     case_slug: 'beaute',
     author_name: 'Aminata Diallo',
+    published: true,
     published_at: '2026-03-28T10:00:00Z',
+    content: null,
     content_md: `Les locks, ou dreadlocks, sont bien plus qu'un style de cheveux : elles représentent une histoire, une identité et un héritage culturel profond.
 
 ## Comprendre la structure des locks
@@ -73,7 +77,9 @@ Si vous êtes débutant, la communauté Talents d'Afrique regorge de coiffeuses 
     tags: ['montage', 'IKEA', 'Paris', 'maison'],
     case_slug: 'maison',
     author_name: 'Oumar Keïta',
+    published: true,
     published_at: '2026-04-02T09:00:00Z',
+    content: null,
     content_md: `Chaque week-end, des milliers de personnes se retrouvent face à des boîtes plates IKEA. Nos talents de la Case Maison savent résoudre cela avec efficacité.
 
 ## Pourquoi faire appel à un talent ?
@@ -100,7 +106,9 @@ Comptez entre 20 et 50 euros de l'heure selon la complexité des meubles.`,
     tags: ['recette', 'cuisine africaine', 'sénégal', 'riz au poisson'],
     case_slug: 'saveurs',
     author_name: 'Fatou Kouyaté',
+    published: true,
     published_at: '2026-04-05T12:00:00Z',
+    content: null,
     content_md: `Le thiéboudienne est le plat national du Sénégal. Il se compose de riz cuit dans une sauce à base de tomate, accompagné de poisson et de légumes variés.
 
 ## Ingrédients (pour 6 personnes)
@@ -129,7 +137,9 @@ Dans l'huile, faites revenir les oignons puis ajoutez le concentré de tomates. 
     tags: ['kory', 'cauri', 'économie', 'diaspora', 'histoire'],
     case_slug: null,
     author_name: "L'équipe Talents d'Afrique",
+    published: true,
     published_at: '2026-04-08T14:00:00Z',
+    content: null,
     content_md: `Le nom "Kory" n'a pas été choisi au hasard. Il s'inspire directement du Cauri, l'une des plus anciennes monnaies du monde.
 
 ## L'histoire du Cauri
@@ -154,7 +164,9 @@ En vous inscrivant sur Talents d'Afrique, vous recevez automatiquement 10 Korys 
     tags: ['tresses', 'coiffure', 'braids', 'beauté', 'domicile'],
     case_slug: 'beaute',
     author_name: 'Mariama Bah',
+    published: true,
     published_at: '2026-04-09T10:00:00Z',
+    content: null,
     content_md: `Se faire tresser à domicile présente de nombreux avantages. Voici nos conseils pour choisir la bonne coiffeuse.
 
 ## Définissez votre style
@@ -182,7 +194,9 @@ Arrivez avec vos cheveux propres, légèrement hydratés et démêlés.`,
     tags: ['Lyon', 'Cameroun', 'diaspora', 'communauté'],
     case_slug: null,
     author_name: 'Nadia Tchoupo',
+    published: true,
     published_at: '2026-04-11T11:00:00Z',
+    content: null,
     content_md: `Lyon est une ville où la communauté camerounaise s'est fortement implantée. Rencontre avec des talents qui ont transformé leur passion en activité.
 
 ## Estelle, reine des perruques sur-mesure
@@ -216,12 +230,20 @@ async function getPost(slug: string): Promise<BlogPost | null> {
     )
     const { data } = await supabase
       .from('blog_posts')
-      .select('*')
+      .select('*, author:profiles!author_id(name)')
       .eq('slug', slug)
-      .eq('status', 'published')
+      .eq('published', true)
       .single()
 
-    return (data as BlogPost) ?? null
+    if (!data) return null
+    const post = {
+      ...data,
+      author_name:
+        (data.author as { name?: string } | null)?.name ?? "Talents d'Afrique",
+      // Normalize: expose content as content_md for backward compat
+      content_md: data.content ?? null,
+    }
+    return post as BlogPost
   } catch {
     return null
   }

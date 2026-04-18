@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-type BlogStatus = 'draft' | 'pending' | 'published' | 'rejected'
-
 interface BlogPostInsert {
   title: string
   slug: string
@@ -12,9 +10,8 @@ interface BlogPostInsert {
   cover_image?: string
   tags?: string[]
   case_slug?: string
-  status?: BlogStatus
+  status?: string
   author_id?: string
-  author_name?: string
 }
 
 function createSupabase(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -59,21 +56,20 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('blog_posts')
     .select(
-      'id, title, slug, excerpt, cover_image, tags, case_slug, author_name, published_at, created_at, status, is_featured, views'
+      'id, title, slug, excerpt, cover_image, tags, case_slug, author:profiles!author_id(name), published_at, created_at, published'
     )
     .order('published_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
   if (statusParam === 'all' && isAdmin) {
     // no filter
-  } else if (
-    isAdmin &&
-    ['draft', 'pending', 'published', 'rejected'].includes(statusParam)
-  ) {
-    query = query.eq('status', statusParam)
+  } else if (isAdmin && statusParam === 'draft') {
+    query = query.eq('published', false)
+  } else if (isAdmin && statusParam === 'published') {
+    query = query.eq('published', true)
   } else {
     // Non-admin always sees only published
-    query = query.eq('status', 'published')
+    query = query.eq('published', true)
   }
 
   if (caseParam) {
@@ -86,7 +82,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ posts: data ?? [] })
+  // Normalize author_name from join
+  const posts = (data ?? []).map((p: Record<string, unknown>) => {
+    const author = p.author as { name?: string } | null
+    return {
+      ...p,
+      author_name: author?.name ?? "Talents d'Afrique",
+    }
+  })
+
+  return NextResponse.json({ posts })
 }
 
 // POST /api/blog — create post
@@ -103,7 +108,6 @@ export async function POST(request: NextRequest) {
   }
 
   let isAdmin = false
-  let authorName = 'Talents d\'Afrique'
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -113,7 +117,6 @@ export async function POST(request: NextRequest) {
 
   if (profile) {
     isAdmin = profile.is_admin === true
-    authorName = profile.name ?? authorName
   }
 
   const body = (await request.json()) as BlogPostInsert
@@ -125,24 +128,21 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Status rules
-  let status: BlogStatus = 'pending'
-  if (isAdmin && body.status) {
-    status = body.status
-  }
+  // Map status string to published boolean
+  // Admin can publish directly; others submit as pending (published: false)
+  const wantsPublished = isAdmin && body.status === 'published'
 
   const insert = {
     title: body.title,
     slug: body.slug,
     excerpt: body.excerpt ?? null,
-    content_md: body.content_md ?? null,
+    content: body.content_md ?? '',
     cover_image: body.cover_image ?? null,
     tags: body.tags ?? [],
     case_slug: body.case_slug ?? null,
     author_id: user.id,
-    author_name: body.author_name ?? authorName,
-    status,
-    published_at: status === 'published' ? new Date().toISOString() : null,
+    published: wantsPublished,
+    published_at: wantsPublished ? new Date().toISOString() : null,
   }
 
   const { data, error } = await supabase

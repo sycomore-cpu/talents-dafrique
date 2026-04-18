@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-type BlogStatus = 'draft' | 'pending' | 'published' | 'rejected'
-
 interface BlogPostUpdate {
   title?: string
   excerpt?: string
@@ -11,9 +9,7 @@ interface BlogPostUpdate {
   cover_image?: string
   tags?: string[]
   case_slug?: string | null
-  status?: BlogStatus
-  author_name?: string
-  is_featured?: boolean
+  status?: string
 }
 
 function createSupabase(cookieStore: Awaited<ReturnType<typeof cookies>>) {
@@ -39,7 +35,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
   const slugParam = new URL(request.url).searchParams.get('slug')
 
-  let query = supabase.from('blog_posts').select('*')
+  let query = supabase
+    .from('blog_posts')
+    .select('*, author:profiles!author_id(name)')
 
   if (slugParam) {
     query = query.eq('slug', slugParam)
@@ -53,14 +51,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
   }
 
-  // Increment view count (fire and forget)
-  supabase
-    .from('blog_posts')
-    .update({ views: (data.views ?? 0) + 1 })
-    .eq('id', data.id)
-    .then(() => {})
+  const post = {
+    ...data,
+    author_name: (data.author as { name?: string } | null)?.name ?? "Talents d'Afrique",
+    // Expose content as content_md for backward compatibility
+    content_md: data.content ?? '',
+  }
 
-  return NextResponse.json({ post: data })
+  return NextResponse.json({ post })
 }
 
 // PATCH /api/blog/[id] — update post
@@ -105,9 +103,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
   const body = (await request.json()) as BlogPostUpdate
 
-  // Non-admin authors can only edit pending posts, not change status
+  // Non-admin authors can only edit unpublished posts
   if (!isAdmin) {
-    if (post.status !== 'pending') {
+    if (post.published === true) {
       return NextResponse.json(
         { error: 'Vous ne pouvez modifier que vos articles en attente' },
         { status: 403 }
@@ -116,15 +114,27 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     delete body.status
   }
 
-  const wasPublished = post.status !== 'published' && body.status === 'published'
+  // Map status string to published boolean
+  const wasPublished = post.published !== true && body.status === 'published'
+  const isUnpublishing = post.published === true && body.status === 'draft'
 
-  const update: Record<string, unknown> = {
-    ...body,
-    updated_at: new Date().toISOString(),
+  const update: Record<string, unknown> = {}
+
+  if (body.title !== undefined) update.title = body.title
+  if (body.excerpt !== undefined) update.excerpt = body.excerpt
+  if (body.content_md !== undefined) update.content = body.content_md
+  if (body.cover_image !== undefined) update.cover_image = body.cover_image
+  if (body.tags !== undefined) update.tags = body.tags
+  if (body.case_slug !== undefined) update.case_slug = body.case_slug
+
+  if (body.status !== undefined) {
+    update.published = body.status === 'published'
   }
 
   if (wasPublished) {
     update.published_at = new Date().toISOString()
+  } else if (isUnpublishing) {
+    update.published_at = null
   }
 
   const { data: updated, error } = await supabase

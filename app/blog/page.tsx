@@ -32,6 +32,7 @@ interface BlogPost {
   tags: string[]
   case_slug: string | null
   author_name: string
+  published: boolean
   published_at: string | null
 }
 
@@ -48,6 +49,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['coiffure', 'locks', 'entretien', 'beauté'],
     case_slug: 'beaute',
     author_name: 'Aminata Diallo',
+    published: true,
     published_at: '2026-03-28T10:00:00Z',
   },
   {
@@ -60,6 +62,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['montage', 'IKEA', 'Paris', 'maison'],
     case_slug: 'maison',
     author_name: 'Oumar Keïta',
+    published: true,
     published_at: '2026-04-02T09:00:00Z',
   },
   {
@@ -72,6 +75,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['recette', 'cuisine africaine', 'sénégal', 'riz au poisson'],
     case_slug: 'saveurs',
     author_name: 'Fatou Kouyaté',
+    published: true,
     published_at: '2026-04-05T12:00:00Z',
   },
   {
@@ -84,6 +88,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['kory', 'cauri', 'économie', 'diaspora', 'histoire'],
     case_slug: null,
     author_name: "L'équipe Talents d'Afrique",
+    published: true,
     published_at: '2026-04-08T14:00:00Z',
   },
   {
@@ -96,6 +101,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['tresses', 'coiffure', 'braids', 'beauté', 'domicile'],
     case_slug: 'beaute',
     author_name: 'Mariama Bah',
+    published: true,
     published_at: '2026-04-09T10:00:00Z',
   },
   {
@@ -108,6 +114,7 @@ const MOCK_POSTS: BlogPost[] = [
     tags: ['Lyon', 'Cameroun', 'diaspora', 'communauté'],
     case_slug: null,
     author_name: 'Nadia Tchoupo',
+    published: true,
     published_at: '2026-04-11T11:00:00Z',
   },
 ]
@@ -241,14 +248,18 @@ export default async function BlogPage() {
     const { data } = await supabase
       .from('blog_posts')
       .select(
-        'id, slug, title, excerpt, cover_image, tags, case_slug, author_name, published_at'
+        'id, slug, title, excerpt, cover_image, tags, case_slug, author:profiles!author_id(name), published, published_at'
       )
-      .eq('status', 'published')
+      .eq('published', true)
       .order('published_at', { ascending: false })
       .limit(30)
 
     if (data && data.length > 0) {
-      posts = data as BlogPost[]
+      posts = (data as Array<Record<string, unknown>>).map((p) => ({
+        ...p,
+        author_name:
+          (p.author as { name?: string } | null)?.name ?? "Talents d'Afrique",
+      })) as unknown as BlogPost[]
     } else {
       posts = MOCK_POSTS
     }
