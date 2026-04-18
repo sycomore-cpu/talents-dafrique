@@ -83,11 +83,11 @@ export async function POST(request: NextRequest) {
   const timestamp = Math.round(Date.now() / 1000)
   const folder = `talents/${user.id}`
 
-  // Signature HMAC-SHA1 (paramètres triés alphabétiquement)
+  // Signature SHA-1 (Cloudinary signed upload : params + api_secret, sans HMAC)
   const crypto = await import('crypto')
-  const paramsToSign = `folder=${folder}&timestamp=${timestamp}`
+  const paramsToSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`
   const signature = crypto
-    .createHmac('sha1', apiSecret)
+    .createHash('sha1')
     .update(paramsToSign)
     .digest('hex')
 
