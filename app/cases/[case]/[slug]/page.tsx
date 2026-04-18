@@ -187,7 +187,29 @@ function getTalentSlug(talent: Profile): string {
 
 function findTalentBySlug(caseSlug: string, slug: string): MockProfile | null {
   const caseTalents = ALL_MOCK_TALENTS.filter((t) => t.case_slug === caseSlug)
-  return caseTalents.find((t) => getTalentSlug(t) === slug) ?? caseTalents[0] ?? null
+  return caseTalents.find((t) => getTalentSlug(t) === slug) ?? null
+}
+
+async function findTalentBySlugFromDb(caseSlug: string, slug: string): Promise<MockProfile | null> {
+  try {
+    const { createClient } = await import('@/lib/supabase/server')
+    const supabase = await createClient()
+    // Extract ID prefix from slug (last 6 chars after last dash)
+    const parts = slug.split('-')
+    const idPrefix = parts[parts.length - 1]
+    if (!idPrefix || idPrefix.length < 4) return null
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('case_slug', caseSlug)
+      .eq('is_talent', true)
+      .ilike('id', `${idPrefix}%`)
+      .single()
+    if (!data) return null
+    return { ...(data as unknown as Profile), average_rating: (data as Record<string, unknown>).trust_score as number ?? 0 } as MockProfile
+  } catch {
+    return null
+  }
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -198,7 +220,7 @@ export async function generateMetadata({
   params: Promise<{ case: string; slug: string }>
 }): Promise<Metadata> {
   const { case: caseSlug, slug } = await params
-  const talent = findTalentBySlug(caseSlug, slug)
+  const talent = (await findTalentBySlugFromDb(caseSlug, slug)) ?? findTalentBySlug(caseSlug, slug)
   const caseData = getCaseBySlug(caseSlug)
 
   if (!talent || !caseData) return { title: 'Talent introuvable' }
@@ -206,6 +228,11 @@ export async function generateMetadata({
   return {
     title: `${talent.name} — ${caseData.label} à ${talent.city}`,
     description: talent.bio?.slice(0, 160) ?? `${talent.name}, ${caseData.description} à ${talent.city}.`,
+    openGraph: {
+      title: `${talent.name} — ${caseData.label} à ${talent.city} | Talents d'Afrique`,
+      description: talent.bio?.slice(0, 160) ?? undefined,
+      images: talent.photos?.[0] ? [talent.photos[0]] : [],
+    },
   }
 }
 
@@ -221,7 +248,7 @@ export default async function TalentProfilePage({
 
   if (!caseData) notFound()
 
-  const talent = findTalentBySlug(caseSlug, slug)
+  const talent = (await findTalentBySlugFromDb(caseSlug, slug)) ?? findTalentBySlug(caseSlug, slug)
   if (!talent) notFound()
 
   const photoSrcs =

@@ -11,6 +11,7 @@ import { Input, Textarea, Select } from '@/components/ui/Input'
 import { KoryBalance } from '@/components/ui/KoryBalance'
 import { StarRating } from '@/components/ui/StarRating'
 import { CASES, AVAILABILITY_DAYS, VILLES } from '@/lib/constants'
+import { slugify } from '@/lib/utils'
 import type { ReservationStatus } from '@/lib/supabase/types'
 import {
   Copy,
@@ -23,6 +24,10 @@ import {
   TrendingUp,
   Loader2,
   Share2,
+  UserCheck,
+  ExternalLink,
+  Calendar,
+  User,
 } from 'lucide-react'
 import { usePhotoUpload } from '@/lib/usePhotoUpload'
 import { createClient } from '@/lib/supabase/client'
@@ -460,6 +465,7 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
   // Talent section state
+  const [isTalent, setIsTalent] = useState(profile.is_talent ?? false)
   const [caseSlug, setCaseSlug] = useState(profile.case_slug ?? '')
   const [subServices, setSubServices] = useState<string[]>(profile.sub_services ?? [])
   const [availability, setAvailability] = useState<Record<string, { start: string; end: string }>>(
@@ -525,12 +531,11 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
       phone: phone || null,
       bio: bio || null,
     }
-    // Sauvegarder aussi les infos talent si applicable
-    if (profile.is_talent) {
-      update.case_slug = caseSlug || null
-      update.sub_services = subServices
-      update.availability = availability
-    }
+    // Sauvegarder aussi les infos talent
+    update.is_talent = isTalent
+    update.case_slug = caseSlug || null
+    update.sub_services = subServices
+    update.availability = availability
     const { error } = await supabase.from('profiles').update(update).eq('id', profile.id)
     setSaving(false)
     if (error) {
@@ -680,81 +685,141 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
         )}
       </div>
 
-      {/* Talent section */}
-      {profile.is_talent && (
-        <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
-          <h3 className="font-semibold text-brown mb-4">Mon espace talent</h3>
+      {/* Talent section — always visible */}
+      <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
+        <h3 className="font-semibold text-brown mb-1">Mon profil talent</h3>
+        <p className="text-sm text-brown/60 mb-4">
+          Activez cette option pour apparaître dans les résultats de recherche.
+        </p>
 
-          {/* Case selector */}
-          <div className="mb-4">
-            <Select
-              label="Ma Case"
-              value={caseSlug}
-              onChange={(e) => { setCaseSlug(e.target.value); setSubServices([]) }}
-              options={CASES.map((c) => ({ value: c.slug, label: `${c.icon} ${c.label}` }))}
-              placeholder="Choisir ma catégorie"
+        {/* Toggle is_talent */}
+        <label className="flex items-center gap-3 cursor-pointer mb-5">
+          <div
+            onClick={() => setIsTalent((v) => !v)}
+            className={`relative w-11 h-6 rounded-full transition-colors ${isTalent ? 'bg-green-500' : 'bg-brown/20'}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isTalent ? 'translate-x-5' : 'translate-x-0'}`}
             />
           </div>
+          <span className="text-sm font-medium text-brown flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4" />
+            Proposer mes services sur Talents d&apos;Afrique
+          </span>
+        </label>
 
-          {/* Sub-services */}
-          {caseSlug && (
+        {isTalent && (
+          <>
+            {/* Case selector */}
             <div className="mb-4">
-              <p className="text-sm font-medium text-brown mb-2">Mes services</p>
+              <Select
+                label="Ma Case"
+                value={caseSlug}
+                onChange={(e) => { setCaseSlug(e.target.value); setSubServices([]) }}
+                options={CASES.map((c) => ({ value: c.slug, label: `${c.icon} ${c.label}` }))}
+                placeholder="Choisir ma catégorie"
+              />
+            </div>
+
+            {/* Sub-services */}
+            {caseSlug && (
+              <div className="mb-4">
+                <p className="text-sm font-medium text-brown mb-2">Mes services</p>
+                <div className="flex flex-wrap gap-2">
+                  {(CASES.find((c) => c.slug === caseSlug)?.services ?? []).map((svc) => (
+                    <button
+                      key={svc}
+                      type="button"
+                      onClick={() =>
+                        setSubServices((prev) =>
+                          prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
+                        )
+                      }
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        subServices.includes(svc)
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white text-brown/60 border-brown/20 hover:border-primary/50'
+                      }`}
+                    >
+                      {svc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Availability */}
+            <div className="mb-5">
+              <p className="text-sm font-medium text-brown mb-2">Disponibilités</p>
               <div className="flex flex-wrap gap-2">
-                {(CASES.find((c) => c.slug === caseSlug)?.services ?? []).map((svc) => (
-                  <button
-                    key={svc}
-                    type="button"
-                    onClick={() =>
-                      setSubServices((prev) =>
-                        prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
-                      )
-                    }
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      subServices.includes(svc)
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-white text-brown/60 border-brown/20 hover:border-primary/50'
-                    }`}
-                  >
-                    {svc}
-                  </button>
-                ))}
+                {AVAILABILITY_DAYS.map((day) => {
+                  const isAvail = day in availability
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() =>
+                        setAvailability((prev) => {
+                          const next = { ...prev }
+                          if (isAvail) { delete next[day] }
+                          else { next[day] = { start: '09:00', end: '18:00' } }
+                          return next
+                        })
+                      }
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        isAvail
+                          ? 'bg-secondary text-white border-secondary'
+                          : 'bg-white text-brown/60 border-brown/20 hover:border-secondary/50'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  )
+                })}
               </div>
             </div>
-          )}
 
-          {/* Availability */}
-          <div>
-            <p className="text-sm font-medium text-brown mb-2">Disponibilités</p>
-            <div className="flex flex-wrap gap-2">
-              {AVAILABILITY_DAYS.map((day) => {
-                const isAvail = day in availability
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() =>
-                      setAvailability((prev) => {
-                        const next = { ...prev }
-                        if (isAvail) { delete next[day] }
-                        else { next[day] = { start: '09:00', end: '18:00' } }
-                        return next
-                      })
-                    }
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      isAvail
-                        ? 'bg-secondary text-white border-secondary'
-                        : 'bg-white text-brown/60 border-brown/20 hover:border-secondary/50'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2 pt-4 border-t border-brown/8">
+              {caseSlug && (
+                <a
+                  href={`/cases/${caseSlug}/${slugify(profile.name)}-${profile.id.slice(0, 6)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brown/20 text-sm font-medium text-brown hover:bg-brown/5 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Voir mon profil public
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talentsdafrique.com'
+                  const talentSlug = `${slugify(profile.name)}-${profile.id.slice(0, 6)}`
+                  const profileUrl = caseSlug
+                    ? `${siteUrl}/cases/${caseSlug}/${talentSlug}`
+                    : `${siteUrl}`
+                  const shareData = {
+                    title: `${profile.name} — Talents d'Afrique`,
+                    text: `Découvrez mon profil sur Talents d'Afrique ! Je propose mes services dans la communauté africaine.`,
+                    url: profileUrl,
+                  }
+                  if (navigator.share) {
+                    try { await navigator.share(shareData) } catch { /* user cancelled */ }
+                  } else {
+                    navigator.clipboard.writeText(profileUrl)
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Partager mon profil
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Referral code */}
       <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
@@ -996,10 +1061,10 @@ export default function DashboardPage() {
     )
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'reservations', label: 'Mes réservations' },
-    { key: 'profil', label: 'Mon profil' },
-    { key: 'korys', label: 'Mes Korys' },
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'reservations', label: 'Réservations', icon: <Calendar className="w-4 h-4" /> },
+    { key: 'profil', label: 'Mon profil', icon: <User className="w-4 h-4" /> },
+    { key: 'korys', label: 'Mes Korys', icon: <TrendingUp className="w-4 h-4" /> },
   ]
 
   return (
@@ -1009,16 +1074,27 @@ export default function DashboardPage() {
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
             <Avatar src={profile.avatar_url} name={profile.name} size="lg" ring="primary" />
-            <div>
+            <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-brown font-playfair">
                 Bonjour, {profile.name.split(' ')[0]}
               </h1>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <Badge
                   variant={profile.status === 'parraine' ? 'parraine' : 'observation'}
                   size="sm"
                 />
                 <KoryBalance balance={profile.kory_balance} variant="compact" />
+                {profile.is_talent && profile.case_slug && (
+                  <a
+                    href={`/cases/${profile.case_slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-full px-2.5 py-0.5 hover:bg-primary/5 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Voir ma Case
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -1031,12 +1107,13 @@ export default function DashboardPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key
                     ? 'border-primary text-primary'
                     : 'border-transparent text-brown/50 hover:text-brown'
                 }`}
               >
+                {tab.icon}
                 {tab.label}
               </button>
             ))}
