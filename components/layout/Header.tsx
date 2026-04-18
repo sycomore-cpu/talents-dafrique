@@ -156,61 +156,82 @@ function UserMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-brown/10 bg-cream shadow-lg z-50 py-2">
-          <Link
-            href="/dashboard"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zM12 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z" />
-            </svg>
-            Mon tableau de bord
-          </Link>
-          <Link
-            href="/profil"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-            Mon profil
-          </Link>
-          {!profile.is_talent && (
+        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-brown/10 bg-cream shadow-lg z-50 overflow-hidden">
+          {/* Identity header */}
+          <div className="px-4 py-3 bg-brown/5 border-b border-brown/10">
+            <p className="text-sm font-semibold text-brown truncate">{profile.name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs text-brown/50">
+                {profile.is_talent ? '✦ Talent' : 'Membre'}
+              </span>
+              <span className="text-xs text-brown/30">·</span>
+              <span className="text-xs font-medium text-kory">{profile.kory_balance} K</span>
+            </div>
+          </div>
+
+          <div className="py-1.5">
+            {/* Mon espace (unique lien dashboard) */}
             <Link
-              href="/dashboard?tab=profil"
+              href="/dashboard"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-primary font-medium hover:bg-primary/5 transition-colors"
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
+            >
+              <svg className="w-4 h-4 text-brown/50" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zM12 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zM11 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z" />
+              </svg>
+              Mon espace
+            </Link>
+
+            {/* Talent CTA : proposer si pas encore talent, voir profil public si talent */}
+            {profile.is_talent && profile.case_slug ? (
+              <Link
+                href={`/cases/${profile.case_slug}`}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
+              >
+                <svg className="w-4 h-4 text-brown/50" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                Mon profil public
+              </Link>
+            ) : (
+              <Link
+                href="/dashboard?tab=profil&guide=talent"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                Proposer mes services ✦
+              </Link>
+            )}
+
+            {profile.is_admin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
+              >
+                <svg className="w-4 h-4 text-brown/50" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0117.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Administration
+              </Link>
+            )}
+          </div>
+
+          <div className="border-t border-brown/10">
+            <button
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
             >
               <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
               </svg>
-              Proposer mes services
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/admin"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-brown hover:bg-brown/5 transition-colors"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              Administration
-            </Link>
-          )}
-          <div className="my-1 border-t border-brown/10" />
-          <button
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-            </svg>
-            Se déconnecter
-          </button>
+              Se déconnecter
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1012,6 +1012,12 @@ export default function DashboardPage() {
     return 'reservations'
   })
   const [profileTimedOut, setProfileTimedOut] = useState(false)
+  // Guide talent : affiché quand ?guide=talent dans l'URL
+  const [showTalentGuide, setShowTalentGuide] = useState(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('guide') === 'talent'
+      : false
+  )
 
   // Redirect non-authentifié en useEffect (pas dans le render)
   useEffect(() => {
@@ -1123,6 +1129,41 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 py-6">
+
+        {/* Guide : partager ses services (affiché si ?guide=talent) */}
+        {showTalentGuide && !profile.is_talent && (
+          <div className="bg-brown text-white rounded-xl p-5 mb-6 relative">
+            <button
+              onClick={() => setShowTalentGuide(false)}
+              className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-start gap-4">
+              <span className="text-3xl shrink-0">🌟</span>
+              <div>
+                <h2 className="font-bold font-playfair text-lg mb-1">
+                  Propose tes services à la communauté
+                </h2>
+                <p className="text-white/70 text-sm leading-relaxed mb-4">
+                  En 3 étapes simples, ton profil talent sera visible par des milliers de membres de la diaspora africaine.
+                </p>
+                <ol className="text-sm text-white/80 space-y-1.5 mb-4 list-none">
+                  <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-xs font-bold shrink-0">1</span> Clique sur <strong className="text-white">«&nbsp;Mon profil&nbsp;»</strong> ci-dessus</li>
+                  <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-xs font-bold shrink-0">2</span> Active le toggle <strong className="text-white">«&nbsp;Proposer mes services&nbsp;»</strong></li>
+                  <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-xs font-bold shrink-0">3</span> Choisis ta Case, tes services et tes disponibilités</li>
+                </ol>
+                <button
+                  onClick={() => { setShowTalentGuide(false); setActiveTab('profil') }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Commencer maintenant →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* CTA for incomplete talent profiles */}
         {activeTab === 'reservations' && profile.is_talent && !profile.bio && (
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-5 flex items-center justify-between gap-4">

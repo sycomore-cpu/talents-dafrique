@@ -54,23 +54,6 @@ function GridIcon({ active }: { active: boolean }) {
   )
 }
 
-function CalendarIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="w-6 h-6"
-      fill={active ? '#C8920A' : 'none'}
-      stroke={active ? '#C8920A' : 'currentColor'}
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  )
-}
 
 function UserIcon({ active }: { active: boolean }) {
   return (
@@ -153,23 +136,27 @@ export function MobileNav() {
   const { profile } = useAuth()
 
   // Auth-aware dynamic items
-  const proposerHref = profile ? '/dashboard?tab=profil' : '/inscription'
-  const proposerLabel = profile ? 'Mon espace' : 'Proposer'
+  // "Proposer" : si connecté → guide vers l'onglet talent ; sinon → inscription
+  const proposerHref = profile
+    ? (profile.is_talent ? '/dashboard?tab=profil' : '/dashboard?tab=profil&guide=talent')
+    : '/inscription'
+  const proposerLabel = profile ? (profile.is_talent ? 'Mon talent' : 'Proposer') : 'Proposer'
 
-  const profilHref = profile ? '/dashboard' : '/connexion'
-  const profilLabel = profile ? (profile.name.split(' ')[0]) : 'Connexion'
+  // "Mon espace" : si connecté → dashboard ; sinon → connexion
+  const espaceHref = profile ? '/dashboard' : '/connexion'
+  const espaceLabel = profile ? 'Mon espace' : 'Connexion'
 
   const dynamicItems: NavItem[] = [
     {
       href: proposerHref,
       label: proposerLabel,
-      matchPaths: profile ? ['/dashboard'] : ['/inscription'],
+      matchPaths: profile ? [] : ['/inscription'],
       icon: (active) => <PlusIcon active={active} />,
     },
     {
-      href: profilHref,
-      label: profilLabel,
-      matchPaths: profile ? ['/profil', '/dashboard'] : ['/connexion'],
+      href: espaceHref,
+      label: espaceLabel,
+      matchPaths: profile ? ['/dashboard'] : ['/connexion'],
       icon: (active) => <UserIcon active={active} />,
     },
   ]
@@ -195,18 +182,6 @@ export function MobileNav() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Navigation mobile"
     >
-      {/* Logged-in user identity bar */}
-      {profile && (
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 px-4 py-2 border-b border-brown/8 bg-primary/5 hover:bg-primary/10 transition-colors"
-        >
-          <span className="text-xs font-semibold text-primary truncate">
-            {profile.name}
-          </span>
-          <span className="ml-auto text-[10px] text-brown/50 shrink-0">Tableau de bord →</span>
-        </Link>
-      )}
       <div className="flex items-stretch">
         {visibleItems.map((item) => {
           const active = isActive(item)

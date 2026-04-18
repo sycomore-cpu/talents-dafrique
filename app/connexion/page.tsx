@@ -218,16 +218,32 @@ export default function ConnexionPage() {
                 </Button>
               </form>
 
-              <div className="pt-2 border-t border-brown/8 text-center space-y-2">
-                <p className="text-sm text-brown/50">
+              <div className="pt-2 border-t border-brown/8 space-y-3">
+                <p className="text-sm text-brown/50 text-center">
                   Pas encore de compte ?{' '}
                   <Link href="/inscription" className="text-primary hover:underline font-medium">
                     Créer un compte
                   </Link>
                 </p>
-                <Link href="/" className="text-xs text-brown/40 hover:text-primary transition-colors">
-                  ← Retour à l&apos;accueil
+                {/* CTA partager ses services */}
+                <Link
+                  href="/inscription"
+                  className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/15 rounded-xl hover:bg-primary/10 transition-colors group"
+                >
+                  <span className="text-xl shrink-0">✦</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-brown">Proposer mes services</p>
+                    <p className="text-xs text-brown/50">Crée ton profil talent et rejoins la communauté</p>
+                  </div>
+                  <svg className="w-4 h-4 text-primary shrink-0 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </Link>
+                <div className="text-center">
+                  <Link href="/" className="text-xs text-brown/40 hover:text-primary transition-colors">
+                    ← Retour à l&apos;accueil
+                  </Link>
+                </div>
               </div>
             </>
           )}
