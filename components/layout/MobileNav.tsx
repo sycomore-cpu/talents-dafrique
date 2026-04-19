@@ -117,9 +117,9 @@ const staticNavItems: NavItem[] = [
     icon: (active) => <HomeIcon active={active} />,
   },
   {
-    href: '/cases/beaute',
+    href: '/talents',
     label: 'Explorer',
-    matchPaths: ['/cases'],
+    matchPaths: ['/talents', '/cases'],
     icon: (active) => <GridIcon active={active} />,
   },
   {
