@@ -41,10 +41,9 @@ async function fetchOrCreateProfile(
     // 2. Profil absent → on le crée (trigger manqué ou race condition)
     if (error?.code === 'PGRST116') {
       const code = Math.random().toString(36).slice(2, 10).toUpperCase()
-      const name =
-        (userMeta?.full_name as string) ??
-        (userMeta?.email as string) ??
-        'Nouveau membre'
+      // Ne JAMAIS utiliser l'email comme nom — risque de fuite de données
+      const rawName = (userMeta?.full_name as string) ?? (userMeta?.name as string) ?? ''
+      const name = rawName.trim() || 'Nouveau membre'
       const { data: created, error: insertError } = await supabase
         .from('profiles')
         .insert({ id: userId, name, parrain_code: code, kory_balance: 10 })
