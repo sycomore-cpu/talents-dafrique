@@ -78,6 +78,7 @@ function formatDate(dateStr: string) {
 // ─── Reservation Card ─────────────────────────────────────────────────────────
 
 function ReservationCard({
+  reservationId,
   name,
   avatar,
   service,
@@ -85,9 +86,13 @@ function ReservationCard({
   time,
   status,
   whatsapp,
+  phone,
+  contactRevealedInitial,
   hasReview,
   onLeaveReview,
+  onRefresh,
 }: {
+  reservationId: string
   name: string
   avatar: string | null
   service: string
@@ -95,10 +100,29 @@ function ReservationCard({
   time: string
   status: ReservationStatus
   whatsapp: string
+  phone: string
+  contactRevealedInitial: boolean
   hasReview: boolean
   onLeaveReview: () => void
+  onRefresh?: () => void
 }) {
-  const [contactRevealed, setContactRevealed] = useState(false)
+  const [contactRevealed, setContactRevealed] = useState(contactRevealedInitial)
+  const [revealing, setRevealing] = useState(false)
+
+  async function handleReveal() {
+    setRevealing(true)
+    try {
+      await fetch('/api/reservations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reservationId, action: 'reveal_contact' }),
+      })
+      setContactRevealed(true)
+      onRefresh?.()
+    } finally {
+      setRevealing(false)
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-brown/10 p-4 shadow-sm">
@@ -121,23 +145,40 @@ function ReservationCard({
       {status === 'accepted' && (
         <div className="mt-3 pt-3 border-t border-brown/8">
           {contactRevealed ? (
-            <a
-              href={`https://wa.me/${whatsapp}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
-            >
-              <MessageCircle className="w-4 h-4" />
-              WhatsApp : +{whatsapp}
-            </a>
+            <div className="flex flex-col gap-2">
+              {whatsapp && (
+                <a
+                  href={`https://wa.me/${whatsapp.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors w-fit"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  WhatsApp : {whatsapp}
+                </a>
+              )}
+              {phone && phone !== whatsapp && (
+                <a
+                  href={`tel:${phone.replace(/\s/g, '')}`}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-fit"
+                >
+                  <Phone className="w-4 h-4" />
+                  {phone}
+                </a>
+              )}
+              {!whatsapp && !phone && (
+                <p className="text-xs text-brown/50 italic">Aucun contact renseigné par le talent.</p>
+              )}
+            </div>
           ) : (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setContactRevealed(true)}
+              onClick={handleReveal}
+              disabled={revealing}
             >
-              <Phone className="w-3.5 h-3.5" />
-              Contacter
+              {revealing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Phone className="w-3.5 h-3.5" />}
+              Contacter (1 Kory)
             </Button>
           )}
         </div>
@@ -283,7 +324,7 @@ type ReservationRow = {
   status: ReservationStatus
   contact_revealed: boolean
   talent_id?: string
-  talent?: { name: string; avatar_url: string | null; whatsapp: string | null }
+  talent?: { name: string; avatar_url: string | null; whatsapp: string | null; phone: string | null }
   client?: { name: string; avatar_url: string | null }
 }
 
@@ -302,7 +343,7 @@ function ReservationsTab({ userId }: { userId: string }) {
     const [clientRes, talentRes] = await Promise.all([
       supabase
         .from('reservations')
-        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, talent:profiles!talent_id(name, avatar_url, whatsapp)')
+        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, talent:profiles!talent_id(name, avatar_url, whatsapp, phone)')
         .eq('client_id', userId)
         .order('created_at', { ascending: false }),
       supabase
@@ -370,6 +411,7 @@ function ReservationsTab({ userId }: { userId: string }) {
           ) : clientReservations.map((r) => (
             <ReservationCard
               key={r.id}
+              reservationId={r.id}
               name={r.talent?.name ?? '—'}
               avatar={r.talent?.avatar_url ?? null}
               service={r.service}
@@ -377,7 +419,10 @@ function ReservationsTab({ userId }: { userId: string }) {
               time={r.requested_time}
               status={r.status}
               whatsapp={r.talent?.whatsapp ?? ''}
+              phone={r.talent?.phone ?? ''}
+              contactRevealedInitial={r.contact_revealed}
               hasReview={false}
+              onRefresh={loadReservations}
               onLeaveReview={() => r.talent_id && setReviewTarget({
                 reservationId: r.id,
                 talentId: r.talent_id,
@@ -395,6 +440,7 @@ function ReservationsTab({ userId }: { userId: string }) {
           ) : talentReservations.map((r) => (
             <div key={r.id} className="flex flex-col gap-2">
               <ReservationCard
+                reservationId={r.id}
                 name={r.client?.name ?? '—'}
                 avatar={r.client?.avatar_url ?? null}
                 service={r.service}
@@ -402,6 +448,8 @@ function ReservationsTab({ userId }: { userId: string }) {
                 time={r.requested_time}
                 status={r.status}
                 whatsapp=""
+                phone=""
+                contactRevealedInitial={false}
                 hasReview={false}
                 onLeaveReview={() => {}}
               />

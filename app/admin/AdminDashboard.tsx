@@ -637,7 +637,7 @@ function BlogTab() {
       .select('id, title, slug, case_slug, published, author:profiles!author_id(name), published_at, created_at')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        setPosts((data as AdminBlogPost[]) ?? [])
+        setPosts((data as unknown as AdminBlogPost[]) ?? [])
         setLoading(false)
       })
   }, [supabase])
