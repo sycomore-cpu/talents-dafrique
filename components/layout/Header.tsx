@@ -10,6 +10,7 @@ import Avatar from '@/components/ui/Avatar'
 import KoryBalance from '@/components/ui/KoryBalance'
 import Button from '@/components/ui/Button'
 import { LogoMark } from '@/components/layout/LogoMark'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 
 function CasesDropdown() {
   const [open, setOpen] = useState(false)
@@ -283,6 +284,7 @@ export function Header() {
 
         {/* Right actions */}
         <div className="flex items-center gap-2 shrink-0">
+          <NotificationBell />
           <UserMenu />
         </div>
       </div>

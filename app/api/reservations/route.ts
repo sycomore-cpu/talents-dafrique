@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 function serverSupabase(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -13,6 +14,65 @@ function serverSupabase(cookieStore: Awaited<ReturnType<typeof cookies>>) {
       },
     }
   )
+}
+
+// POST /api/reservations — create a new reservation
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = serverSupabase(cookieStore)
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { talent_id, service, date, message } = body
+
+    if (!talent_id || !service) {
+      return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
+    }
+
+    const { data: reservation, error } = await supabase
+      .from('reservations')
+      .insert({
+        client_id: user.id,
+        talent_id,
+        service,
+        date: date ?? null,
+        message: message ?? null,
+        status: 'pending',
+      })
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Notify the talent about the new reservation
+    const { data: clientProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('name')
+      .eq('id', user.id)
+      .single()
+
+    const clientName = clientProfile?.name ?? 'Un membre'
+    const dateStr = date ? new Date(date).toLocaleDateString('fr-FR') : ''
+
+    const { error: notifErr1 } = await supabaseAdmin.from('notifications').insert({
+      user_id: talent_id,
+      type: 'reservation_new',
+      title: 'Nouvelle demande 🔔',
+      message: `${clientName} souhaite réserver "${service}"${dateStr ? ` le ${dateStr}` : ''}.`,
+      link: '/dashboard?tab=reservations',
+    })
+    if (notifErr1) console.error('[notify reservation_new]', notifErr1)
+
+    return NextResponse.json({ reservation })
+  } catch (err) {
+    console.error('[api/reservations POST]', err)
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
 }
 
 // PATCH /api/reservations
@@ -36,13 +96,15 @@ export async function PATCH(request: NextRequest) {
     // Récupérer la réservation pour vérifier les droits
     const { data: reservation, error: fetchError } = await supabase
       .from('reservations')
-      .select('id, status, talent_id, client_id')
+      .select('id, status, talent_id, client_id, service, date')
       .eq('id', id)
       .single()
 
     if (fetchError || !reservation) {
       return NextResponse.json({ error: 'Réservation introuvable' }, { status: 404 })
     }
+
+    const service: string = reservation.service ?? 'votre prestation'
 
     if (action === 'accept') {
       // Seul le talent peut accepter
@@ -80,6 +142,17 @@ export async function PATCH(request: NextRequest) {
         .eq('id', id)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      // Notifier le client
+      const { error: notifErr2 } = await supabaseAdmin.from('notifications').insert({
+        user_id: reservation.client_id,
+        type: 'reservation_accepted',
+        title: 'Demande acceptée 🎉',
+        message: `Votre demande pour "${service}" a été acceptée ! Vous pouvez maintenant contacter le talent.`,
+        link: '/dashboard?tab=reservations',
+      })
+      if (notifErr2) console.error('[notify reservation_accepted]', notifErr2)
+
       return NextResponse.json({ success: true, status: 'accepted' })
     }
 
@@ -98,6 +171,17 @@ export async function PATCH(request: NextRequest) {
         .eq('id', id)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      // Notifier le client
+      const { error: notifErr3 } = await supabaseAdmin.from('notifications').insert({
+        user_id: reservation.client_id,
+        type: 'reservation_refused',
+        title: 'Demande refusée',
+        message: `Votre demande pour "${service}" a été refusée.`,
+        link: '/dashboard?tab=reservations',
+      })
+      if (notifErr3) console.error('[notify reservation_refused]', notifErr3)
+
       return NextResponse.json({ success: true, status: 'refused' })
     }
 
@@ -116,6 +200,17 @@ export async function PATCH(request: NextRequest) {
         .eq('id', id)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      // Notifier le talent
+      const { error: notifErr4 } = await supabaseAdmin.from('notifications').insert({
+        user_id: reservation.talent_id,
+        type: 'contact_revealed',
+        title: 'Contact révélé 📞',
+        message: `Un client a révélé votre contact pour "${service}".`,
+        link: '/dashboard?tab=reservations',
+      })
+      if (notifErr4) console.error('[notify contact_revealed]', notifErr4)
+
       return NextResponse.json({ success: true })
     }
 
