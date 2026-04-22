@@ -257,6 +257,8 @@ function Step2Profile({ email, onNext }: Step2Props) {
   const [photos, setPhotos] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [geoError, setGeoError] = useState<string | null>(null)
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).slice(0, 3 - photos.length)
@@ -271,6 +273,56 @@ function Step2Profile({ email, onNext }: Step2Props) {
     const newUrls = previewUrls.filter((_, i) => i !== index)
     setPhotos(newPhotos)
     setPreviewUrls(newUrls)
+  }
+
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) {
+      setGeoError('La géolocalisation n\'est pas disponible sur votre navigateur.')
+      return
+    }
+    setGeoLoading(true)
+    setGeoError(null)
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+            { headers: { 'Accept-Language': 'fr' } }
+          )
+          const data = await res.json()
+          const cityName: string =
+            data?.address?.city ||
+            data?.address?.town ||
+            data?.address?.village ||
+            data?.address?.municipality ||
+            ''
+
+          // Find closest city in VILLES list (case-insensitive partial match)
+          if (cityName) {
+            const normalized = cityName.toLowerCase()
+            const match = VILLES.find(
+              (v) =>
+                v !== 'Autre' &&
+                !v.includes('(') &&
+                (v.toLowerCase() === normalized ||
+                  normalized.startsWith(v.toLowerCase()) ||
+                  v.toLowerCase().startsWith(normalized))
+            )
+            setCity(match ?? cityName)
+          }
+        } catch {
+          setGeoError('Impossible de déterminer votre ville.')
+        } finally {
+          setGeoLoading(false)
+        }
+      },
+      () => {
+        setGeoError('Accès à la géolocalisation refusé.')
+        setGeoLoading(false)
+      },
+      { timeout: 10000 }
+    )
   }
 
   const validate = () => {
@@ -310,16 +362,41 @@ function Step2Profile({ email, onNext }: Step2Props) {
       />
 
       {/* City */}
-      <Select
-        label="Ville"
-        placeholder="Choisir une ville"
-        value={city}
-        onChange={(e) => { setCity(e.target.value); setErrors((p) => ({ ...p, city: '' })) }}
-        required
-        error={errors.city}
-        id="city"
-        options={VILLES.map((v) => ({ value: v, label: v }))}
-      />
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label htmlFor="city" className="text-sm font-medium text-brown">
+            Ville <span className="text-red-500">*</span>
+          </label>
+          <button
+            type="button"
+            onClick={handleGeolocate}
+            disabled={geoLoading}
+            className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {geoLoading ? (
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <span aria-hidden="true">📍</span>
+            )}
+            Me localiser
+          </button>
+        </div>
+        <Select
+          placeholder="Choisir une ville"
+          value={city}
+          onChange={(e) => { setCity(e.target.value); setErrors((p) => ({ ...p, city: '' })) }}
+          required
+          error={errors.city}
+          id="city"
+          options={VILLES.map((v) => ({ value: v, label: v }))}
+        />
+        {geoError && (
+          <p className="text-xs text-red-500">{geoError}</p>
+        )}
+      </div>
 
       {/* Phone */}
       <Input
@@ -406,13 +483,14 @@ interface Step3Props {
   profileData: ProfileData
   onFinish: (data: TalentData) => void
   isLoading: boolean
+  initialParrainCode?: string
 }
 
-function Step3Talent({ profileData, onFinish, isLoading }: Step3Props) {
+function Step3Talent({ profileData, onFinish, isLoading, initialParrainCode = '' }: Step3Props) {
   const [isTalent, setIsTalent] = useState(false)
   const [caseSlug, setCaseSlug] = useState('')
   const [subServices, setSubServices] = useState<string[]>([])
-  const [parrainCode, setParrainCode] = useState('')
+  const [parrainCode, setParrainCode] = useState(initialParrainCode.toUpperCase())
   const [parrainValid, setParrainValid] = useState<boolean | null>(null)
 
   const initialAvailability = AVAILABILITY_DAYS.reduce<Record<string, { start: string; end: string; enabled: boolean }>>(
@@ -454,6 +532,13 @@ function Step3Talent({ profileData, onFinish, isLoading }: Step3Props) {
       .single()
     setParrainValid(!!data)
   }, [])
+
+  // Auto-validate initial parrain code from ?ref= param
+  useEffect(() => {
+    if (initialParrainCode) {
+      checkParrainCode(initialParrainCode.toUpperCase())
+    }
+  }, [initialParrainCode, checkParrainCode])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -715,6 +800,9 @@ function InscriptionInner() {
   const [done, setDone] = useState(false)
   const [wasTalent, setWasTalent] = useState(false)
 
+  // Read ?ref= param for parrainage pre-fill
+  const refCode = searchParams.get('ref') ?? ''
+
   // Lire le paramètre ?step= et avancer si déjà connecté
   useEffect(() => {
     if (authLoading) return
@@ -780,25 +868,24 @@ function InscriptionInner() {
     if (talentData.parrainCode) {
       const { data: parrainProfile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, kory_balance')
         .eq('parrain_code', talentData.parrainCode.toUpperCase())
         .single()
       if (parrainProfile) {
         profileUpdate.parrain_id = parrainProfile.id
         profileUpdate.status = 'parraine'
+
         // Créditer le parrain (+3 Korys)
         await supabase.from('kory_transactions').insert({
           user_id: parrainProfile.id,
           amount: 3,
           reason: `Parrainage de ${profileData?.name ?? 'un nouveau membre'}`,
         })
-        // Incrémenter le solde Kory du parrain via SQL atomique
         await supabase.rpc('add_kory', {
           target_user_id: parrainProfile.id,
           delta: 3,
         }).then(async ({ error }) => {
           if (error) {
-            // Fallback si la RPC n'existe pas : fetch + update manuel
             const { data: pp } = await supabase
               .from('profiles')
               .select('kory_balance')
@@ -812,6 +899,40 @@ function InscriptionInner() {
             }
           }
         })
+
+        // Créditer le filleul (+3 Korys)
+        await supabase.from('kory_transactions').insert({
+          user_id: user.id,
+          amount: 3,
+          reason: 'Bienvenue ! Vous avez été parrainé·e 🎉',
+        })
+        const { data: filleulProfile } = await supabase
+          .from('profiles')
+          .select('kory_balance')
+          .eq('id', user.id)
+          .single()
+        if (filleulProfile) {
+          await supabase
+            .from('profiles')
+            .update({ kory_balance: (filleulProfile.kory_balance ?? 0) + 3 })
+            .eq('id', user.id)
+        }
+
+        // Notification parrain via API route (service role)
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-secret': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+          },
+          body: JSON.stringify({
+            user_id: parrainProfile.id,
+            type: 'parrainage',
+            title: 'Nouveau filleul 🎉',
+            message: `${profileData?.name ?? 'Quelqu\'un'} vient de s\'inscrire avec votre code parrain ! +3 Korys.`,
+            link: '/parrainage',
+          }),
+        }).catch(() => {})
       }
     }
 
@@ -862,6 +983,7 @@ function InscriptionInner() {
                   profileData={profileData}
                   onFinish={handleStep3Finish}
                   isLoading={isLoading}
+                  initialParrainCode={refCode}
                 />
               )}
             </>
