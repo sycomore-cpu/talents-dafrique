@@ -22,6 +22,10 @@ import {
   Eye,
   Loader2,
   RotateCcw,
+  Phone,
+  MessageCircle,
+  Search,
+  ChevronUp,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,10 +37,16 @@ interface Profile {
   name: string
   city: string | null
   case: string | null
+  case_slug: string | null
   status: ProfileStatus
   created_at: string
+  updated_at: string
   is_talent: boolean
   kory_balance: number
+  phone: string | null
+  whatsapp: string | null
+  trust_score: number
+  bio: string | null
 }
 
 interface Report {
@@ -1043,13 +1053,220 @@ function KorysTab() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-type AdminTab = 'overview' | 'moderation' | 'blog' | 'korys'
+// ─── Users Tab ────────────────────────────────────────────────────────────────
+
+function UsersTab() {
+  const supabase = createClient()
+  const [search, setSearch] = useState('')
+  const [users, setUsers] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [boostLoading, setBoostLoading] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function loadUsers(query: string) {
+    setLoading(true)
+    try {
+      let req = supabase
+        .from('profiles')
+        .select('id, name, city, case_slug, status, is_talent, kory_balance, phone, whatsapp, trust_score, bio, created_at, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(20)
+
+      if (query.trim().length >= 2) {
+        req = req.ilike('name', `%${query.trim()}%`)
+      }
+
+      const { data } = await req
+      setUsers((data as Profile[]) ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUsers('')
+  }, [])
+
+  function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    setSearch(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => loadUsers(val), 300)
+  }
+
+  async function updateStatus(userId: string, status: ProfileStatus) {
+    await supabase.from('profiles').update({ status }).eq('id', userId)
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status } : u))
+  }
+
+  async function boostTrust(userId: string) {
+    setBoostLoading(userId)
+    const user = users.find((u) => u.id === userId)
+    const newScore = Math.min((user?.trust_score ?? 0) + 0.5, 5)
+    await supabase.from('profiles').update({ trust_score: newScore }).eq('id', userId)
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, trust_score: newScore } : u))
+    setBoostLoading(null)
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brown/40" />
+        <input
+          type="search"
+          placeholder="Rechercher un membre par nom…"
+          value={search}
+          onChange={handleSearch}
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-brown/20 bg-white text-brown placeholder:text-brown/40 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-brown/10 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-5 h-5 animate-spin text-brown/30" />
+          </div>
+        ) : users.length === 0 ? (
+          <p className="text-center text-brown/40 text-sm py-10">Aucun membre trouvé.</p>
+        ) : (
+          <div className="divide-y divide-brown/6">
+            {users.map((u) => (
+              <div key={u.id}>
+                {/* Row */}
+                <div
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-brown/2 cursor-pointer"
+                  onClick={() => setExpanded(expanded === u.id ? null : u.id)}
+                >
+                  <Avatar name={u.name} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-brown text-sm">{u.name}</span>
+                      {u.is_talent && (
+                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">Talent</span>
+                      )}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                        u.status === 'parraine' ? 'bg-green-50 text-green-700' :
+                        u.status === 'suspendu' ? 'bg-red-50 text-red-700' :
+                        'bg-amber-50 text-amber-700'
+                      }`}>{u.status}</span>
+                    </div>
+                    <p className="text-xs text-brown/50 mt-0.5">{u.city ?? '—'} · ⭐ {u.trust_score?.toFixed(1) ?? '0.0'} · 🪙 {u.kory_balance} Korys</p>
+                  </div>
+                  <ChevronUp className={`w-4 h-4 text-brown/30 shrink-0 transition-transform ${expanded === u.id ? '' : 'rotate-180'}`} />
+                </div>
+
+                {/* Expanded detail */}
+                {expanded === u.id && (
+                  <div className="px-5 pb-4 bg-brown/2 border-t border-brown/6">
+                    <div className="pt-3 flex flex-col gap-3">
+                      {/* Contact */}
+                      <div className="flex flex-wrap gap-2">
+                        {u.phone && (
+                          <a
+                            href={`https://wa.me/${u.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            WhatsApp : {u.phone}
+                          </a>
+                        )}
+                        {u.whatsapp && u.whatsapp !== u.phone && (
+                          <a
+                            href={`https://wa.me/${u.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            WA : {u.whatsapp}
+                          </a>
+                        )}
+                        {!u.phone && !u.whatsapp && (
+                          <span className="text-xs text-brown/40 italic">Aucun contact renseigné</span>
+                        )}
+                      </div>
+
+                      {/* Bio */}
+                      {u.bio && (
+                        <p className="text-xs text-brown/60 leading-relaxed line-clamp-2">{u.bio}</p>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); boostTrust(u.id) }}
+                          disabled={boostLoading === u.id}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+                        >
+                          {boostLoading === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                          Booster (+0.5 ⭐)
+                        </button>
+                        {u.status !== 'parraine' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateStatus(u.id, 'parraine') }}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <CircleCheck className="w-3.5 h-3.5" />
+                            Certifier
+                          </button>
+                        )}
+                        {u.status !== 'suspendu' ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateStatus(u.id, 'suspendu') }}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            Suspendre
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateStatus(u.id, 'observation') }}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Rétablir
+                          </button>
+                        )}
+                        {u.case_slug && (
+                          <a
+                            href={`/cases/${u.case_slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-brown/60 bg-brown/5 px-2.5 py-1.5 rounded-lg hover:bg-brown/10 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Voir sa Case
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type AdminTab = 'overview' | 'moderation' | 'blog' | 'korys' | 'users'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview')
 
   const tabs: { key: AdminTab; label: string; icon: React.FC<{ className?: string }> }[] = [
     { key: 'overview', label: "Vue d'ensemble", icon: TrendingUp },
+    { key: 'users', label: 'Membres', icon: Users },
     { key: 'moderation', label: 'Modération', icon: TriangleAlert },
     { key: 'blog', label: 'Blog', icon: FileText },
     { key: 'korys', label: 'Korys', icon: Coins },
@@ -1105,6 +1322,7 @@ export default function AdminDashboard() {
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         {activeTab === 'overview' && <OverviewTab />}
+        {activeTab === 'users' && <UsersTab />}
         {activeTab === 'moderation' && <ModerationTab />}
         {activeTab === 'blog' && <BlogTab />}
         {activeTab === 'korys' && <KorysTab />}

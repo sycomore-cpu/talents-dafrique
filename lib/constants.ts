@@ -90,6 +90,20 @@ export const CASES = [
       'Traduction',
     ],
   },
+  {
+    slug: 'aide-personne',
+    label: 'Case Aide à la personne',
+    icon: '🤝',
+    description: 'Baby-sitting, personnes âgées, tâches ménagères',
+    color: 'bg-sky-50 border-sky-200',
+    services: [
+      'Baby-sitting / garde d\'enfants',
+      'Accompagnement de personnes âgées',
+      'Aide aux courses',
+      'Tâches ménagères / ménage',
+      'Aide au repassage',
+    ],
+  },
 ]
 
 export const VILLES = [

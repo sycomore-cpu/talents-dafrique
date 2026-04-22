@@ -21,6 +21,7 @@ async function getAllTalents(): Promise<(Profile & { average_rating?: number })[
       .eq('is_talent', true)
       .neq('status', 'suspendu')
       .order('trust_score', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(200)
 
     if (error || !data) return []

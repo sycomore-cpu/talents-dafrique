@@ -230,7 +230,12 @@ function BlogCard({ post }: { post: BlogPost }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function BlogPage() {
+export default async function BlogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; case?: string }>
+}) {
+  const { q, case: caseFilter } = await searchParams
   // Fetch from Supabase
   let posts: BlogPost[] = []
   try {
@@ -267,9 +272,25 @@ export default async function BlogPage() {
     posts = MOCK_POSTS
   }
 
-  const caseCounts = CASES.slice(0, 5).map((c) => ({
+  // Client-side filter by search query and case
+  const allPosts = posts
+  if (q?.trim()) {
+    const query = q.trim().toLowerCase()
+    posts = posts.filter(
+      (p) =>
+        p.title.toLowerCase().includes(query) ||
+        p.excerpt?.toLowerCase().includes(query) ||
+        p.tags.some((t) => t.toLowerCase().includes(query)) ||
+        p.author_name.toLowerCase().includes(query)
+    )
+  }
+  if (caseFilter) {
+    posts = posts.filter((p) => p.case_slug === caseFilter)
+  }
+
+  const caseCounts = CASES.slice(0, 6).map((c) => ({
     ...c,
-    count: posts.filter((p) => p.case_slug === c.slug).length,
+    count: allPosts.filter((p) => p.case_slug === c.slug).length,
   }))
 
   return (
@@ -287,9 +308,44 @@ export default async function BlogPage() {
             Conseils, recettes, guides et histoires de notre communauté.
             Partageons nos savoirs, nos talents, et notre culture.
           </p>
+          {/* Search bar */}
+          <form method="GET" className="mt-6 flex gap-2 max-w-md mx-auto w-full">
+            <input
+              type="search"
+              name="q"
+              defaultValue={q ?? ''}
+              placeholder="Rechercher un article…"
+              className="flex-1 px-4 py-2.5 rounded-xl text-brown text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/10 placeholder:text-white/50 text-white border border-white/20"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              🔍
+            </button>
+          </form>
+
+          <div className="mt-4 flex gap-2 flex-wrap justify-center">
+            <Link
+              href="/blog"
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${!caseFilter ? 'bg-white text-brown' : 'text-white/70 hover:text-white bg-white/10'}`}
+            >
+              Tous
+            </Link>
+            {CASES.slice(0, 7).map((c) => (
+              <Link
+                key={c.slug}
+                href={`/blog?case=${c.slug}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${caseFilter === c.slug ? 'bg-white text-brown' : 'text-white/70 hover:text-white bg-white/10'}`}
+              >
+                {c.icon} {c.label.replace('Case ', '')}
+              </Link>
+            ))}
+          </div>
+
           <Link
             href="/blog/soumettre"
-            className="inline-flex items-center gap-2 bg-primary text-white font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-primary text-white font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors text-sm mt-4"
           >
             ✍️ Proposer un article
           </Link>
@@ -297,14 +353,32 @@ export default async function BlogPage() {
       </section>
 
       <div className="max-w-6xl mx-auto px-4 py-10">
+        {/* Results count */}
+        {(q || caseFilter) && (
+          <div className="mb-5 flex items-center gap-3 flex-wrap">
+            <p className="text-sm text-brown/60">
+              {posts.length} article{posts.length > 1 ? 's' : ''} trouvé{posts.length > 1 ? 's' : ''}
+              {q && <> pour &ldquo;<strong className="text-brown">{q}</strong>&rdquo;</>}
+            </p>
+            <Link href="/blog" className="text-xs text-primary underline">Effacer les filtres</Link>
+          </div>
+        )}
         <div className="flex gap-8">
           {/* Articles grid */}
           <main className="flex-1 min-w-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {posts.map((post) => (
-                <BlogCard key={post.id} post={post} />
-              ))}
-            </div>
+            {posts.length === 0 ? (
+              <div className="text-center py-16 text-brown/40">
+                <p className="text-4xl mb-3">📝</p>
+                <p className="text-base">Aucun article trouvé.</p>
+                <Link href="/blog" className="mt-3 inline-block text-sm text-primary underline">Voir tous les articles</Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {posts.map((post) => (
+                  <BlogCard key={post.id} post={post} />
+                ))}
+              </div>
+            )}
           </main>
 
           {/* Sidebar (desktop only) */}
@@ -349,17 +423,18 @@ export default async function BlogPage() {
               </h3>
               <div className="flex flex-col gap-2">
                 {caseCounts.map((c) => (
-                  <div
+                  <Link
                     key={c.slug}
-                    className="flex items-center justify-between py-1.5"
+                    href={`/blog?case=${c.slug}`}
+                    className={`flex items-center justify-between py-1.5 rounded-lg px-2 -mx-2 transition-colors hover:bg-brown/5 ${caseFilter === c.slug ? 'bg-primary/5' : ''}`}
                   >
-                    <span className="flex items-center gap-2 text-sm text-brown/70">
+                    <span className={`flex items-center gap-2 text-sm ${caseFilter === c.slug ? 'text-primary font-medium' : 'text-brown/70'}`}>
                       {c.icon} {c.label}
                     </span>
                     <span className="text-xs font-medium text-brown/40 bg-brown/5 px-2 py-0.5 rounded-full">
                       {c.count}
                     </span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
