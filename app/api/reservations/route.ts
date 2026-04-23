@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sendEmail, emailReservationNew, emailReservationAccepted, emailReservationRefused } from '@/lib/email'
 
 function serverSupabase(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
@@ -67,6 +68,16 @@ export async function POST(request: NextRequest) {
       link: '/dashboard?tab=reservations',
     })
     if (notifErr1) console.error('[notify reservation_new]', notifErr1)
+
+    // Email the talent
+    const { data: { user: talentAuthUser } } = await supabaseAdmin.auth.admin.getUserById(talent_id)
+    const talentEmail = talentAuthUser?.email
+    if (talentEmail) {
+      const { data: talentProfile } = await supabaseAdmin.from('profiles').select('name').eq('id', talent_id).single()
+      const talentName = talentProfile?.name ?? 'le talent'
+      const emailData = emailReservationNew(talentName, clientName, service, dateStr || 'une date à convenir')
+      await sendEmail(talentEmail, emailData.subject, emailData.html)
+    }
 
     return NextResponse.json({ reservation })
   } catch (err) {
@@ -153,6 +164,18 @@ export async function PATCH(request: NextRequest) {
       })
       if (notifErr2) console.error('[notify reservation_accepted]', notifErr2)
 
+      // Email the client
+      const { data: { user: clientAuthUser } } = await supabaseAdmin.auth.admin.getUserById(reservation.client_id)
+      const clientEmail = clientAuthUser?.email
+      if (clientEmail) {
+        const { data: clientProfile } = await supabaseAdmin.from('profiles').select('name').eq('id', reservation.client_id).single()
+        const { data: talentProfileAccept } = await supabaseAdmin.from('profiles').select('name').eq('id', user.id).single()
+        const clientName = clientProfile?.name ?? 'le client'
+        const talentName = talentProfileAccept?.name ?? 'le talent'
+        const emailData = emailReservationAccepted(clientName, talentName, service)
+        await sendEmail(clientEmail, emailData.subject, emailData.html)
+      }
+
       return NextResponse.json({ success: true, status: 'accepted' })
     }
 
@@ -182,6 +205,16 @@ export async function PATCH(request: NextRequest) {
       })
       if (notifErr3) console.error('[notify reservation_refused]', notifErr3)
 
+      // Email the client
+      const { data: { user: clientAuthUserRefuse } } = await supabaseAdmin.auth.admin.getUserById(reservation.client_id)
+      const clientEmailRefuse = clientAuthUserRefuse?.email
+      if (clientEmailRefuse) {
+        const { data: clientProfileRefuse } = await supabaseAdmin.from('profiles').select('name').eq('id', reservation.client_id).single()
+        const clientNameRefuse = clientProfileRefuse?.name ?? 'le client'
+        const emailData = emailReservationRefused(clientNameRefuse, service)
+        await sendEmail(clientEmailRefuse, emailData.subject, emailData.html)
+      }
+
       return NextResponse.json({ success: true, status: 'refused' })
     }
 
@@ -200,6 +233,13 @@ export async function PATCH(request: NextRequest) {
         .eq('id', id)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      // Debit 1 Kory from client for revealing contact
+      const { data: clientProfileReveal } = await supabase.from('profiles').select('kory_balance').eq('id', user.id).single()
+      if (clientProfileReveal && (clientProfileReveal.kory_balance ?? 0) > 0) {
+        await supabase.from('profiles').update({ kory_balance: (clientProfileReveal.kory_balance ?? 0) - 1 }).eq('id', user.id)
+        await supabase.from('kory_transactions').insert({ user_id: user.id, amount: -1, reason: "Révélation du contact d'un talent" })
+      }
 
       // Notifier le talent
       const { error: notifErr4 } = await supabaseAdmin.from('notifications').insert({
