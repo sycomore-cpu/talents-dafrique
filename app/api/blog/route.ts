@@ -6,7 +6,8 @@ interface BlogPostInsert {
   title: string
   slug: string
   excerpt?: string
-  content_md?: string
+  content?: string
+  content_md?: string // legacy, kept for backward compat
   cover_image?: string
   tags?: string[]
   case_slug?: string
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
     title: body.title,
     slug: body.slug,
     excerpt: body.excerpt ?? null,
-    content: body.content_md ?? '',
+    content: body.content ?? body.content_md ?? '',
     cover_image: body.cover_image ?? null,
     tags: body.tags ?? [],
     case_slug: body.case_slug ?? null,

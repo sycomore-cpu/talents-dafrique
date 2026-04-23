@@ -433,9 +433,25 @@ export default async function BlogArticlePage({ params }: Props) {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content — detect HTML vs markdown */}
         {post.content_md ? (
-          <BlogContent content={post.content_md} />
+          // If content starts with an HTML tag, render as HTML; otherwise render as markdown
+          post.content_md.trimStart().startsWith('<') ? (
+            <div
+              className="prose prose-brown max-w-none text-brown leading-relaxed
+                [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:font-playfair [&_h2]:text-brown [&_h2]:mt-8 [&_h2]:mb-3
+                [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-brown [&_h3]:mt-6 [&_h3]:mb-2
+                [&_p]:text-brown/80 [&_p]:mb-4
+                [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_ul_li]:text-brown/80 [&_ul_li]:mb-1.5
+                [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-4 [&_ol_li]:text-brown/80 [&_ol_li]:mb-1.5
+                [&_strong]:text-brown [&_strong]:font-semibold
+                [&_em]:text-brown/60 [&_em]:italic
+                [&_a]:text-primary [&_a]:underline"
+              dangerouslySetInnerHTML={{ __html: post.content_md }}
+            />
+          ) : (
+            <BlogContent content={post.content_md} />
+          )
         ) : post.content_html ? (
           <div
             className="prose prose-brown max-w-none text-brown leading-relaxed

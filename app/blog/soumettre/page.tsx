@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea, Select } from '@/components/ui/Input'
+import RichTextEditor from '@/components/ui/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
 import { slugify } from '@/lib/utils'
 import { CASES } from '@/lib/constants'
@@ -76,7 +77,7 @@ export default function SoumettreArticlePage() {
           title,
           slug,
           excerpt: excerpt || undefined,
-          content_md: content,
+          content,
           cover_image: coverImage || undefined,
           tags,
           case_slug: caseSlug || undefined,
@@ -213,27 +214,15 @@ export default function SoumettreArticlePage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-medium text-brown">
-                  Contenu (Markdown){' '}
+                  Contenu{' '}
                   <span className="text-primary">*</span>
                 </label>
-                <span className="text-xs text-brown/40">
-                  {content.length} caractères
-                </span>
               </div>
-              <textarea
+              <RichTextEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                required
-                placeholder={
-                  '## Introduction\n\nCommencez à écrire votre article...\n\n## Sous-titre\n\nVotre contenu ici...'
-                }
-                rows={16}
-                className="w-full rounded-lg border border-brown/15 bg-white px-3 py-2.5 text-sm text-brown placeholder:text-brown/30 font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary hover:border-brown/30 transition-colors"
+                onChange={setContent}
+                placeholder="Commencez à écrire votre article... Utilisez la barre d'outils pour formater votre texte."
               />
-              <p className="text-xs text-brown/40 mt-1">
-                Utilisez la syntaxe Markdown : ## pour les titres, **gras**,
-                *italique*, - pour les listes.
-              </p>
             </div>
           </div>
 
