@@ -148,26 +148,27 @@ function ReservationCard({
             <div className="flex flex-col gap-2">
               {whatsapp && (
                 <a
-                  href={`https://wa.me/${whatsapp.replace(/\D/g, '')}`}
+                  href={`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Bonjour, je vous contacte suite à notre réservation "${service}" sur Talents d'Afrique 👋`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors w-fit"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 active:scale-95 transition-all w-fit"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  WhatsApp : {whatsapp}
+                  Ouvrir WhatsApp
+                  <span className="text-green-600/70 font-normal">{whatsapp}</span>
                 </a>
               )}
               {phone && phone !== whatsapp && (
                 <a
                   href={`tel:${phone.replace(/\s/g, '')}`}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-fit"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 active:scale-95 transition-all w-fit"
                 >
                   <Phone className="w-4 h-4" />
                   {phone}
                 </a>
               )}
               {!whatsapp && !phone && (
-                <p className="text-xs text-brown/50 italic">Aucun contact renseigné par le talent.</p>
+                <p className="text-xs text-brown/50 italic">Aucun contact renseigné.</p>
               )}
             </div>
           ) : (
@@ -325,7 +326,7 @@ type ReservationRow = {
   contact_revealed: boolean
   talent_id?: string
   talent?: { name: string; avatar_url: string | null; whatsapp: string | null; phone: string | null }
-  client?: { name: string; avatar_url: string | null }
+  client?: { name: string; avatar_url: string | null; phone: string | null; whatsapp: string | null }
 }
 
 type ReviewTarget = { reservationId: string; talentId: string; name: string }
@@ -348,7 +349,7 @@ function ReservationsTab({ userId }: { userId: string }) {
         .order('created_at', { ascending: false }),
       supabase
         .from('reservations')
-        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, client:profiles!client_id(name, avatar_url)')
+        .select('id, service, requested_date, requested_time, status, contact_revealed, talent_id, client:profiles!client_id(name, avatar_url, phone, whatsapp)')
         .eq('talent_id', userId)
         .order('created_at', { ascending: false }),
     ])
@@ -447,9 +448,9 @@ function ReservationsTab({ userId }: { userId: string }) {
                 date={r.requested_date}
                 time={r.requested_time}
                 status={r.status}
-                whatsapp=""
-                phone=""
-                contactRevealedInitial={false}
+                whatsapp={r.client?.whatsapp ?? r.client?.phone ?? ''}
+                phone={r.client?.phone ?? ''}
+                contactRevealedInitial={r.status === 'accepted'}
                 hasReview={false}
                 onLeaveReview={() => {}}
               />
@@ -530,19 +531,30 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
   }
 
   async function shareCode() {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talentsdafrique.com'
-    const text = `Rejoins Talents d'Afrique, la communauté des talents de la diaspora africaine 🌍✨\n\nUtilise mon code de parrainage pour t'inscrire et reçois des Korys en cadeau !\n\n🎁 Code : ${profile.parrain_code}\n👉 ${siteUrl}/inscription?parrain=${profile.parrain_code}`
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Talents d'Afrique", text })
-      } catch {
-        // user cancelled
+    const siteUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talentsdafrique.com')
+    const url = `${siteUrl}/inscription?ref=${profile.parrain_code}`
+    const text = `Rejoins Talents d'Afrique, la communauté des talents de la diaspora africaine 🌍✨\n\nUtilise mon code de parrainage pour t'inscrire et reçois des Korys en cadeau !\n\n🎁 Code : ${profile.parrain_code}\n👉 ${url}`
+
+    // Essaie Web Share API, sinon copie dans le presse-papiers
+    try {
+      if (navigator.share && typeof navigator.share === 'function') {
+        await navigator.share({ title: "Talents d'Afrique", text, url })
+        return
       }
-    } else {
-      navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // annulé par l'utilisateur ou non supporté
     }
+    // Fallback : copie le lien
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // Fallback ultime : prompt
+      window.prompt('Copie ce lien de parrainage :', url)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   async function handleAvatarUpload(file: File) {
@@ -672,7 +684,7 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
             {uploadError}
           </p>
         )}
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
           {photos.map((photo, i) => (
             <div
               key={photo}
@@ -799,7 +811,7 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
             {/* Availability */}
             <div className="mb-5">
               <p className="text-sm font-medium text-brown mb-2">Disponibilités</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {AVAILABILITY_DAYS.map((day) => {
                   const isAvail = day in availability
                   return (
@@ -875,33 +887,38 @@ function ProfileTab({ profile }: { profile: NonNullable<ReturnType<typeof useAut
         <p className="text-sm text-brown/60 mb-3">
           Partagez ce code pour parrainer de nouveaux membres et gagner des Korys.
         </p>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 bg-brown/5 rounded-lg px-4 py-2.5 font-mono font-bold text-brown tracking-widest text-lg">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1 bg-brown/5 rounded-lg px-4 py-2.5 font-mono font-bold text-brown tracking-widest text-lg text-center sm:text-left">
             {profile.parrain_code}
           </div>
-          <button
-            onClick={copyCode}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-brown/15 hover:bg-brown/5 transition-colors text-sm font-medium text-brown"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-green-600" />
-                Copié
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                Copier
-              </>
-            )}
-          </button>
-          <button
-            onClick={shareCode}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium"
-          >
-            <Share2 className="w-4 h-4" />
-            Inviter
-          </button>
+          <div className="flex gap-2 sm:gap-3">
+            <button
+              onClick={copyCode}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-brown/15 hover:bg-brown/5 transition-colors text-sm font-medium text-brown"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-green-600" />
+                  Copié
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copier
+                </>
+              )}
+            </button>
+            <button
+              onClick={shareCode}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-white hover:bg-primary/90 active:scale-95 transition-all text-sm font-medium"
+            >
+              {copied ? (
+                <><Check className="w-4 h-4" />Lien copié !</>
+              ) : (
+                <><Share2 className="w-4 h-4" />Inviter</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

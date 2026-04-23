@@ -66,7 +66,7 @@ export default function TalentsGrid({ talents }: Props) {
       </div>
 
       {/* Case filter pills */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide -mx-4 px-4">
         <button
           onClick={() => setActiveCase(ALL)}
           className={cn(
