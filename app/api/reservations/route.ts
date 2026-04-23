@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { talent_id, service, date, message } = body
+    const { talent_id, service, date, time, description } = body
 
     if (!talent_id || !service) {
       return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
         client_id: user.id,
         talent_id,
         service,
-        date: date ?? null,
-        message: message ?? null,
+        requested_date: date ?? '',
+        requested_time: time ?? '09:00',
+        description: description ?? null,
         status: 'pending',
       })
       .select()

@@ -42,7 +42,7 @@ export default function ReserverPage({
 }) {
   const { talentId } = React.use(params)
   const { user, loading } = useAuth()
-  const supabase = createClient()
+  const supabase = createClient() // still used for loading talent profile
 
   const [talent, setTalent] = useState<Profile | null>(null)
   const [loadingTalent, setLoadingTalent] = useState(true)
@@ -116,18 +116,22 @@ export default function ReserverPage({
     setSubmitting(true)
     setSubmitError(null)
 
-    const { error } = await supabase.from('reservations').insert({
-      client_id: user.id,
-      talent_id: talent!.id,
-      service,
-      description: description || null,
-      requested_date: date,
-      requested_time: time,
-      status: 'pending',
+    // Route through API so that in-app notifications & emails are triggered
+    const res = await fetch('/api/reservations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        talent_id: talent!.id,
+        service,
+        date,
+        time,
+        description: description || null,
+      }),
     })
 
-    if (error) {
-      setSubmitError(error.message)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setSubmitError(data.error ?? 'Une erreur est survenue. Veuillez réessayer.')
       setSubmitting(false)
     } else {
       setSubmitting(false)
