@@ -1237,12 +1237,7 @@ export default async function CasePage({
     .neq('status', 'suspendu')
     .order('trust_score', { ascending: false })
 
-  // Fall back to mock data if no real talents yet
-  const talents: Profile[] = (
-    talentsData && talentsData.length > 0
-      ? talentsData
-      : (mockTalentsByCase[caseSlug] ?? mockTalentsByCase.beaute)
-  ) as unknown as Profile[]
+  const talents: Profile[] = (talentsData ?? []) as unknown as Profile[]
 
   return (
     <div className="min-h-screen bg-cream">
@@ -1262,7 +1257,7 @@ export default async function CasePage({
               </li>
               <li aria-hidden="true">/</li>
               <li>
-                <Link href="/#nos-cases" className="hover:text-primary transition-colors">
+                <Link href="/cases" className="hover:text-primary transition-colors">
                   Cases
                 </Link>
               </li>
@@ -1317,14 +1312,32 @@ export default async function CasePage({
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {talents.map((talent) => (
-                <TalentCard
-                  key={talent.id}
-                  talent={talent as Profile & { average_rating?: number }}
-                />
-              ))}
-            </div>
+            {talents.length === 0 ? (
+              <div className="text-center py-16 px-4">
+                <span className="text-5xl mb-4 block">{caseData.icon}</span>
+                <h3 className="text-lg font-semibold text-brown mb-2">
+                  Les premiers talents arrivent bientôt !
+                </h3>
+                <p className="text-brown/50 text-sm max-w-xs mx-auto mb-6">
+                  Cette Case ouvre ses portes. Inscris-toi pour être parmi les premiers talents ou reviens dans quelques jours.
+                </p>
+                <Link
+                  href="/inscription"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  Rejoindre la communauté
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                {talents.map((talent) => (
+                  <TalentCard
+                    key={talent.id}
+                    talent={talent as Profile & { average_rating?: number }}
+                  />
+                ))}
+              </div>
+            )}
           </main>
         </div>
       </div>

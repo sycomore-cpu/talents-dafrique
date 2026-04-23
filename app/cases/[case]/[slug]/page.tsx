@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { getCaseBySlug, slugify } from '@/lib/utils'
 import { CASES } from '@/lib/constants'
 import type { Profile } from '@/lib/supabase/types'
+import { createClient } from '@/lib/supabase/server'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -153,32 +154,6 @@ const ALL_MOCK_TALENTS: MockProfile[] = [
   },
 ]
 
-// ─── Mock reviews ─────────────────────────────────────────────────────────────
-
-const MOCK_REVIEWS = [
-  {
-    id: 'rev-1',
-    reviewer: 'Aicha M.',
-    rating: 5,
-    comment: 'Absolument parfaite ! Elle est venue à l\'heure, très professionnelle et le résultat est magnifique. Je recommande vivement à toute la communauté, vous ne serez pas déçue.',
-    date: '15 mars 2024',
-  },
-  {
-    id: 'rev-2',
-    reviewer: 'Coumba S.',
-    rating: 5,
-    comment: 'Deuxième fois que je fais appel à ses services et encore une fois impeccable. Elle prend le temps d\'écouter vos envies et de conseiller. Rapport qualité-prix excellent.',
-    date: '2 février 2024',
-  },
-  {
-    id: 'rev-3',
-    reviewer: 'Yaya T.',
-    rating: 4,
-    comment: 'Très bonne expérience. Légèrement en retard mais elle a prévenu. Travail de qualité et ambiance conviviale. Je reviendrai sans hésiter.',
-    date: '18 janvier 2024',
-  },
-]
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getTalentSlug(talent: Profile): string {
@@ -192,7 +167,6 @@ function findTalentBySlug(caseSlug: string, slug: string): MockProfile | null {
 
 async function findTalentBySlugFromDb(caseSlug: string, slug: string): Promise<MockProfile | null> {
   try {
-    const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
     // Extract ID prefix from slug (last segment after last dash)
     const parts = slug.split('-')
@@ -223,7 +197,7 @@ export async function generateMetadata({
   params: Promise<{ case: string; slug: string }>
 }): Promise<Metadata> {
   const { case: caseSlug, slug } = await params
-  const talent = (await findTalentBySlugFromDb(caseSlug, slug)) ?? findTalentBySlug(caseSlug, slug)
+  const talent = await findTalentBySlugFromDb(caseSlug, slug)
   const caseData = getCaseBySlug(caseSlug)
 
   if (!talent || !caseData) return { title: 'Talent introuvable' }
@@ -251,8 +225,23 @@ export default async function TalentProfilePage({
 
   if (!caseData) notFound()
 
-  const talent = (await findTalentBySlugFromDb(caseSlug, slug)) ?? findTalentBySlug(caseSlug, slug)
+  const talent = await findTalentBySlugFromDb(caseSlug, slug)
   if (!talent) notFound()
+
+  // Fetch real reviews from DB
+  let dbReviews: { id: string; rating: number; comment: string | null; created_at: string; reviewer: { name: string } | null }[] = []
+  try {
+    const supabaseForReviews = await createClient()
+    const { data } = await supabaseForReviews
+      .from('reviews')
+      .select('id, rating, comment, created_at, reviewer:profiles!reviewer_id(name)')
+      .eq('talent_id', talent.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    dbReviews = (data ?? []) as typeof dbReviews
+  } catch {
+    // silent — show empty reviews
+  }
 
   const photoSrcs =
     talent.photos.length > 0
@@ -450,23 +439,36 @@ export default async function TalentProfilePage({
                 )}
               </div>
 
-              <div className="flex flex-col divide-y divide-brown/8">
-                {MOCK_REVIEWS.map((review) => (
-                  <div key={review.id} className="py-5 first:pt-0 last:pb-0">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
-                          {review.reviewer.slice(0, 2)}
+              {dbReviews.length === 0 ? (
+                <p className="text-sm text-brown/40 italic py-4 text-center">
+                  Aucun avis pour le moment. Soyez le premier à en laisser un !
+                </p>
+              ) : (
+                <div className="flex flex-col divide-y divide-brown/8">
+                  {dbReviews.map((review) => {
+                    const reviewerName = (review.reviewer as { name: string } | null)?.name ?? 'Membre'
+                    const initials = reviewerName.slice(0, 2).toUpperCase()
+                    const dateStr = new Date(review.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                    return (
+                      <div key={review.id} className="py-5 first:pt-0 last:pb-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
+                              {initials}
+                            </div>
+                            <span className="font-medium text-sm text-brown">{reviewerName}</span>
+                          </div>
+                          <span className="text-xs text-brown/40 shrink-0">{dateStr}</span>
                         </div>
-                        <span className="font-medium text-sm text-brown">{review.reviewer}</span>
+                        <StarRating rating={review.rating} size="sm" className="mb-2" />
+                        {review.comment && (
+                          <p className="text-sm text-brown/70 leading-relaxed">{review.comment}</p>
+                        )}
                       </div>
-                      <span className="text-xs text-brown/40 shrink-0">{review.date}</span>
-                    </div>
-                    <StarRating rating={review.rating} size="sm" className="mb-2" />
-                    <p className="text-sm text-brown/70 leading-relaxed">{review.comment}</p>
-                  </div>
-                ))}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </section>
 
           </div>

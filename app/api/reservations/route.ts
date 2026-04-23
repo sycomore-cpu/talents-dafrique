@@ -108,7 +108,7 @@ export async function PATCH(request: NextRequest) {
     // Récupérer la réservation pour vérifier les droits
     const { data: reservation, error: fetchError } = await supabase
       .from('reservations')
-      .select('id, status, talent_id, client_id, service, date')
+      .select('id, status, talent_id, client_id, service, requested_date')
       .eq('id', id)
       .single()
 

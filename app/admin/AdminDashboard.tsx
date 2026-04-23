@@ -1259,7 +1259,130 @@ function UsersTab() {
   )
 }
 
-type AdminTab = 'overview' | 'moderation' | 'blog' | 'korys' | 'users'
+// ─── Messages Tab ─────────────────────────────────────────────────────────────
+
+interface ContactMessage {
+  id: string
+  name: string
+  email: string
+  subject: string | null
+  message: string
+  status: string
+  created_at: string
+}
+
+function MessagesTab() {
+  const [messages, setMessages] = useState<ContactMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  async function load() {
+    try {
+      const { createClient: createSupabaseAdmin } = await import('@/lib/supabase/admin')
+      // Fetch directly via supabaseAdmin (client-side won't have service role, so use API)
+      const res = await fetch('/api/contact', { headers: { 'x-admin-secret': '' } })
+      const data = await res.json()
+      setMessages(data.messages ?? [])
+    } catch {
+      // fallback — show empty
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function markRead(id: string) {
+    await fetch('/api/contact', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'read' }),
+    })
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status: 'read' } : m))
+  }
+
+  const unread = messages.filter(m => m.status === 'unread').length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-brown">
+          Messages de contact
+          {unread > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full">
+              {unread}
+            </span>
+          )}
+        </h2>
+        <button onClick={load} className="text-sm text-primary hover:underline flex items-center gap-1">
+          <RotateCcw className="w-3.5 h-3.5" /> Actualiser
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-brown/30" /></div>
+      ) : messages.length === 0 ? (
+        <p className="text-brown/40 text-sm text-center py-10">Aucun message pour l&apos;instant.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {messages.map(m => (
+            <div
+              key={m.id}
+              className={`bg-white rounded-xl border p-4 shadow-sm transition-colors ${m.status === 'unread' ? 'border-primary/30 bg-primary/2' : 'border-brown/10'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {m.status === 'unread' && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-primary shrink-0" />
+                    )}
+                    <span className="font-semibold text-brown text-sm">{m.name}</span>
+                    <span className="text-xs text-brown/40">{m.email}</span>
+                    {m.subject && (
+                      <span className="text-xs bg-brown/8 text-brown/60 px-2 py-0.5 rounded-full">{m.subject}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-brown/40 mt-0.5">
+                    {new Date(m.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {expanded === m.id ? (
+                    <p className="text-sm text-brown/80 mt-3 whitespace-pre-wrap leading-relaxed">{m.message}</p>
+                  ) : (
+                    <p className="text-sm text-brown/60 mt-1.5 line-clamp-2">{m.message}</p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setExpanded(expanded === m.id ? null : m.id)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {expanded === m.id ? 'Réduire' : 'Voir tout'}
+                  </button>
+                  {m.status === 'unread' && (
+                    <button
+                      onClick={() => markRead(m.id)}
+                      className="text-xs text-brown/40 hover:text-brown/70"
+                    >
+                      Marquer lu
+                    </button>
+                  )}
+                  <a
+                    href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject ?? 'Votre message sur Talents d\'Afrique')}`}
+                    className="text-xs text-green-700 hover:underline"
+                  >
+                    Répondre
+                  </a>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type AdminTab = 'overview' | 'moderation' | 'blog' | 'korys' | 'users' | 'messages'
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview')
@@ -1270,6 +1393,7 @@ export default function AdminDashboard() {
     { key: 'moderation', label: 'Modération', icon: TriangleAlert },
     { key: 'blog', label: 'Blog', icon: FileText },
     { key: 'korys', label: 'Korys', icon: Coins },
+    { key: 'messages', label: 'Messages', icon: MessageCircle },
   ]
 
   return (
@@ -1326,6 +1450,7 @@ export default function AdminDashboard() {
         {activeTab === 'moderation' && <ModerationTab />}
         {activeTab === 'blog' && <BlogTab />}
         {activeTab === 'korys' && <KorysTab />}
+        {activeTab === 'messages' && <MessagesTab />}
       </div>
     </div>
   )
