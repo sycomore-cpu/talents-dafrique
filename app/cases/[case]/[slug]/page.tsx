@@ -269,14 +269,14 @@ export default async function TalentProfilePage({
 
   return (
     <div className="min-h-screen bg-cream">
-      {/* Mobile sticky CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white border-t border-brown/10 p-4 safe-pb">
+      {/* Mobile sticky CTA — sits above the MobileNav bar (~60 px) */}
+      <div className="fixed bottom-[4.5rem] left-0 right-0 z-50 md:hidden px-4 pb-2">
         <Button href={`/reserver/${talent.id}`} fullWidth size="lg">
           Demander ce talent
         </Button>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 md:pb-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-40 md:pb-8">
         {/* Back button */}
         <Link
           href={`/cases/${caseSlug}`}

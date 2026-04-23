@@ -119,8 +119,10 @@ function Step1Auth({ onSuccess: _onSuccess }: Step1Props) {
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingEmail, setLoadingEmail] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
 
   const handleGoogle = async () => {
+    if (!ageConfirmed) return
     setLoadingGoogle(true)
     setError(null)
     // Cookie pour transmettre la destination sans URL complexe dans redirectTo
@@ -171,6 +173,28 @@ function Step1Auth({ onSuccess: _onSuccess }: Step1Props) {
         </p>
       </div>
 
+      {/* Age + CGU confirmation — required before any auth */}
+      <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${ageConfirmed ? 'border-primary/40 bg-primary/4' : 'border-brown/15 bg-white'}`}>
+        <input
+          type="checkbox"
+          checked={ageConfirmed}
+          onChange={(e) => setAgeConfirmed(e.target.checked)}
+          className="mt-0.5 w-4 h-4 accent-primary shrink-0"
+          aria-required="true"
+          id="age_confirm"
+        />
+        <span className="text-sm text-brown/70 leading-relaxed">
+          Je certifie avoir <strong className="text-brown">au moins 18 ans</strong> et j&apos;accepte les{' '}
+          <Link href="/cgu" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+            Conditions Générales d&apos;Utilisation
+          </Link>{' '}
+          et la{' '}
+          <Link href="/confidentialite" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+            Politique de confidentialité
+          </Link>.
+        </span>
+      </label>
+
       <GoogleButton onClick={handleGoogle} isLoading={loadingGoogle} />
 
       <Divider label="ou" />
@@ -186,12 +210,17 @@ function Step1Auth({ onSuccess: _onSuccess }: Step1Props) {
             required
             id="email"
           />
+          {!ageConfirmed && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Veuillez confirmer votre âge et accepter les conditions pour continuer.
+            </p>
+          )}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
               {error}
             </p>
           )}
-          <Button type="submit" fullWidth isLoading={loadingEmail} disabled={!email}>
+          <Button type="submit" fullWidth isLoading={loadingEmail} disabled={!email || !ageConfirmed}>
             Recevoir un lien d&apos;inscription
           </Button>
         </form>

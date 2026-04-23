@@ -54,7 +54,7 @@ export default function CGUPage() {
             Conditions Générales d&apos;Utilisation
           </h1>
           <p className="text-white/60 mt-2 text-sm">
-            Dernière mise à jour : 1er avril 2026
+            Dernière mise à jour : 23 avril 2026
           </p>
         </div>
       </div>
