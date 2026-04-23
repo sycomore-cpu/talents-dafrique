@@ -3,6 +3,7 @@ import { DM_Sans, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/layout/AuthProvider'
 import { Header } from '@/components/layout/Header'
+import { MobileHeader } from '@/components/layout/MobileHeader'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { Footer } from '@/components/layout/Footer'
 
@@ -67,6 +68,9 @@ export default function RootLayout({
         <AuthProvider>
           {/* Desktop header — hidden on mobile */}
           <Header />
+
+          {/* Mobile header — hidden on desktop */}
+          <MobileHeader />
 
           {/* Main content */}
           <main className="flex-1 pb-safe-bottom md:pb-0">
