@@ -9,6 +9,10 @@ import { TalentCard } from '@/components/talent/TalentCard'
 import { FilterBar } from '@/components/cases/FilterBar'
 import { createClient } from '@/lib/supabase/server'
 
+// ─── ISR revalidation ─────────────────────────────────────────────────────────
+
+export const revalidate = 30
+
 // ─── Static params ─────────────────────────────────────────────────────────────
 
 export function generateStaticParams() {
@@ -1294,7 +1298,7 @@ export default async function CasePage({
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar — FilterBar */}
-          <aside className="lg:w-64 shrink-0">
+          <aside className="lg:w-64 shrink-0 overflow-x-auto">
             <div className="sticky top-4">
               <Suspense fallback={<div className="h-48 rounded-xl bg-gray-100 animate-pulse" />}>
                 <FilterBar

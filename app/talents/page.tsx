@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Découvrez tous les talents de la diaspora africaine : beauté, cuisine, couture, maison et plus encore.",
 }
 
-export const revalidate = 60 // ISR — revalidate every minute
+export const revalidate = 30 // ISR — revalidate every 30 seconds
 
 async function getAllTalents(): Promise<(Profile & { average_rating?: number })[]> {
   try {
