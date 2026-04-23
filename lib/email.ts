@@ -1,16 +1,23 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const FROM = "Talents d'Afrique <noreply@talentsdafrique.com>"
 
+// Lazy singleton — never instantiated at module load time so the build
+// does not fail when RESEND_API_KEY is absent in the build environment.
+let _resend: Resend | null = null
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY)
+  return _resend
+}
+
 export async function sendEmail(to: string, subject: string, html: string) {
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_placeholder')) {
+  const key = process.env.RESEND_API_KEY
+  if (!key || key.startsWith('re_placeholder') || key === 're_123') {
     console.log('[Email skipped — add RESEND_API_KEY]', { to, subject })
     return
   }
   try {
-    await resend.emails.send({ from: FROM, to, subject, html })
+    await getResend().emails.send({ from: FROM, to, subject, html })
   } catch (err) {
     console.error('[Email error]', err)
   }
