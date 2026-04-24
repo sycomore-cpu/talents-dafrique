@@ -125,6 +125,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Realtime subscription to own profile changes (ex. admin credits Korys)
+  useEffect(() => {
+    if (!user?.id) return
+    const channel = supabase
+      .channel(`profile-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new) setProfile(payload.new as Profile)
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id])
+
+  // Poll profile every 60s as fallback (in case realtime is disabled)
+  useEffect(() => {
+    if (!user?.id) return
+    const interval = setInterval(() => {
+      fetchOrCreateProfile(user.id, user.user_metadata ?? {}).then((p) => {
+        if (p) setProfile(p)
+      })
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [user?.id])
+
   async function signOut() {
     await supabase.auth.signOut()
     setUser(null)

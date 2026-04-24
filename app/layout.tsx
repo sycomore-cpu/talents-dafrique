@@ -48,6 +48,21 @@ export const metadata: Metadata = {
       { url: '/logo.svg', type: 'image/svg+xml' },
     ],
   },
+  alternates: {
+    canonical: '/',
+  },
+  keywords: [
+    'talents africains',
+    'diaspora africaine',
+    'coiffure africaine',
+    'couture wax',
+    'cuisine africaine',
+    'chef à domicile',
+    'tresses africaines',
+    'communauté afro',
+    'France',
+    'prestataires afro',
+  ],
 }
 
 export const viewport: Viewport = {
@@ -65,6 +80,22 @@ export default function RootLayout({
       className={`${dmSans.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-cream text-brown">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: "Talents d'Afrique",
+              url: 'https://talentsdafrique.com',
+              logo: 'https://talentsdafrique.com/logo.svg',
+              description:
+                "La communauté des talents de la diaspora africaine en France. Beauté, maison, couture, saveurs, savoir, bien-être et assistance.",
+              sameAs: [],
+              address: { '@type': 'PostalAddress', addressCountry: 'FR' },
+            }),
+          }}
+        />
         <AuthProvider>
           {/* Desktop header — hidden on mobile */}
           <Header />

@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button'
 import { StarRating } from '@/components/ui/StarRating'
 import { KoryBalance } from '@/components/ui/KoryBalance'
 import { AvailabilityBadges } from '@/components/talent/AvailabilityBadges'
+import { ReportProfileButton } from '@/components/talent/ReportProfileButton'
+import { LeaveReviewButton } from '@/components/talent/LeaveReviewButton'
 
 // ─── Static params ─────────────────────────────────────────────────────────────
 
@@ -238,7 +240,7 @@ export default async function TalentProfilePage({
       .eq('talent_id', talent.id)
       .order('created_at', { ascending: false })
       .limit(20)
-    dbReviews = (data ?? []) as typeof dbReviews
+    dbReviews = (data ?? []) as unknown as typeof dbReviews
   } catch {
     // silent — show empty reviews
   }
@@ -256,8 +258,29 @@ export default async function TalentProfilePage({
     ? Math.round((talent.trust_score / 5) * talent.review_count)
     : 0
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: talent.name,
+    jobTitle: caseData.label,
+    address: { '@type': 'PostalAddress', addressLocality: talent.city, addressCountry: 'FR' },
+    description: talent.bio ?? undefined,
+    image: talent.photos?.[0] ?? undefined,
+    url: `https://talentsdafrique.com/cases/${caseSlug}/${slug}`,
+    ...(talent.review_count > 0 && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: talent.trust_score,
+        reviewCount: talent.review_count,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    }),
+  }
+
   return (
     <div className="min-h-screen bg-cream">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       {/* Mobile sticky CTA — sits above the MobileNav bar (~60 px) */}
       <div className="fixed bottom-[4.5rem] left-0 right-0 z-50 md:hidden px-4 pb-2">
         <Button href={`/reserver/${talent.id}`} fullWidth size="lg">
@@ -500,6 +523,8 @@ export default async function TalentProfilePage({
                 Demander ce talent
               </Button>
 
+              <LeaveReviewButton talentId={talent.id} />
+
               <p className="text-xs text-brown/40 text-center">
                 Gratuit · Aucun engagement
               </p>
@@ -518,6 +543,11 @@ export default async function TalentProfilePage({
                 Certaines réservations consomment des Korys, notre monnaie communautaire.
                 Recevez 10 Korys gratuits à l&apos;inscription.
               </p>
+            </div>
+
+            {/* Report profile */}
+            <div className="text-center pt-2">
+              <ReportProfileButton reportedId={talent.id} />
             </div>
 
             {/* Trust badge */}

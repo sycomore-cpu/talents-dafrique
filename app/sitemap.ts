@@ -23,8 +23,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }))
 
-  // Dynamic blog posts from Supabase
+  // Dynamic blog posts + talents from Supabase
   let blogRoutes: MetadataRoute.Sitemap = []
+  let talentRoutes: MetadataRoute.Sitemap = []
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,9 +44,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.6,
       }))
     }
+
+    const { data: talents } = await supabase
+      .from('profiles')
+      .select('id, name, case_slug, updated_at')
+      .eq('is_talent', true)
+      .neq('status', 'suspendu')
+    if (talents) {
+      const slugify = (s: string) =>
+        s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      talentRoutes = talents
+        .filter((t) => t.case_slug && t.name)
+        .map((t) => ({
+          url: `${base}/cases/${t.case_slug}/${slugify(t.name)}-${(t.id as string).slice(0, 6)}`,
+          lastModified: t.updated_at ? new Date(t.updated_at) : now,
+          changeFrequency: 'weekly' as const,
+          priority: 0.7,
+        }))
+    }
   } catch {
-    // If Supabase is unavailable, skip blog routes
+    // If Supabase is unavailable, skip dynamic routes
   }
 
-  return [...staticRoutes, ...caseRoutes, ...blogRoutes]
+  return [...staticRoutes, ...caseRoutes, ...blogRoutes, ...talentRoutes]
 }

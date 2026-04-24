@@ -313,7 +313,7 @@ function readingTime(content: string | null): string {
 // ─── Share Buttons ────────────────────────────────────────────────────────────
 
 function ShareButtons({ title, slug }: { title: string; slug: string }) {
-  const url = `https://talentsdafrique.fr/blog/${slug}`
+  const url = `https://talentsdafrique.com/blog/${slug}`
   const encodedUrl = encodeURIComponent(url)
   const encodedTitle = encodeURIComponent(title)
 

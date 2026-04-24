@@ -101,8 +101,8 @@ export default function CGUPage() {
               <p>
                 La Plateforme est éditée par Talents d&apos;Afrique, accessible à
                 l&apos;adresse{' '}
-                <a href="https://talentsdafrique.fr" className="text-primary hover:underline">
-                  talentsdafrique.fr
+                <a href="https://talentsdafrique.com" className="text-primary hover:underline">
+                  talentsdafrique.com
                 </a>
                 .
               </p>
@@ -355,8 +355,8 @@ export default function CGUPage() {
               <p>
                 Tout Membre faisant l&apos;objet d&apos;une suspension peut nous
                 contacter à{' '}
-                <a href="mailto:contact@talentsdafrique.fr" className="text-primary hover:underline">
-                  contact@talentsdafrique.fr
+                <a href="mailto:contact@talentsdafrique.com" className="text-primary hover:underline">
+                  contact@talentsdafrique.com
                 </a>{' '}
                 pour contester la décision dans un délai de 14 jours.
               </p>
@@ -410,8 +410,8 @@ export default function CGUPage() {
             <div className="bg-brown/5 rounded-xl p-5 text-sm text-brown/60">
               <p>
                 Pour toute question relative aux présentes CGU, contactez-nous :{' '}
-                <a href="mailto:contact@talentsdafrique.fr" className="text-primary hover:underline">
-                  contact@talentsdafrique.fr
+                <a href="mailto:contact@talentsdafrique.com" className="text-primary hover:underline">
+                  contact@talentsdafrique.com
                 </a>
               </p>
               <p className="mt-2">

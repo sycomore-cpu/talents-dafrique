@@ -6,7 +6,7 @@ import { useAuth } from '@/components/layout/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talents-dafrique.vercel.app'
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://talentsdafrique.com'
 
 function StaticPage() {
   return (

@@ -405,7 +405,7 @@ export default function CommentCaMarchePage() {
               Notre équipe est disponible pour vous répondre.
             </p>
             <a
-              href="mailto:contact@talentsdafrique.fr"
+              href="mailto:contact@talentsdafrique.com"
               className="inline-flex items-center gap-2 bg-primary text-white font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors text-sm"
             >
               Nous contacter

@@ -68,6 +68,76 @@ export function emailReservationAccepted(clientName: string, talentName: string,
   }
 }
 
+export function emailContactAdmin(name: string, email: string, subject: string, message: string) {
+  return {
+    subject: `📨 Nouveau message contact — ${subject || 'Sans sujet'}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #3D2009; padding: 24px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #F5E6C8; margin: 0; font-size: 20px;">Talents d'Afrique — Admin</h1>
+        </div>
+        <div style="background: #FFFBF5; padding: 24px; border-radius: 0 0 12px 12px; border: 1px solid #E8D5B7;">
+          <h2 style="color: #3D2009;">Nouveau message depuis le formulaire contact</h2>
+          <p><strong>De :</strong> ${name} &lt;${email}&gt;</p>
+          <p><strong>Sujet :</strong> ${subject || '(non renseigné)'}</p>
+          <hr style="border: none; border-top: 1px solid #E8D5B7; margin: 16px 0;" />
+          <p style="color: #5C3D1E; white-space: pre-wrap;">${message.replace(/</g, '&lt;')}</p>
+          <a href="https://talentsdafrique.com/admin?tab=messages"
+             style="display: inline-block; background: #C8920A; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px;">
+            Ouvrir l'espace admin →
+          </a>
+        </div>
+      </div>
+    `
+  }
+}
+
+export function emailReportNew(reporterName: string, reportedName: string, reason: string, details: string) {
+  return {
+    subject: `🚨 Signalement — ${reportedName}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #7F1D1D; padding: 24px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #FEE2E2; margin: 0; font-size: 20px;">Talents d'Afrique — Modération</h1>
+        </div>
+        <div style="background: #FFFBF5; padding: 24px; border-radius: 0 0 12px 12px; border: 1px solid #E8D5B7;">
+          <h2 style="color: #3D2009;">Nouveau signalement</h2>
+          <p><strong>Signalé par :</strong> ${reporterName}</p>
+          <p><strong>Profil signalé :</strong> ${reportedName}</p>
+          <p><strong>Motif :</strong> ${reason}</p>
+          ${details ? `<p><strong>Détails :</strong><br/><span style="white-space: pre-wrap;">${details.replace(/</g, '&lt;')}</span></p>` : ''}
+          <a href="https://talentsdafrique.com/admin?tab=moderation"
+             style="display: inline-block; background: #C8920A; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px;">
+            Ouvrir la modération →
+          </a>
+        </div>
+      </div>
+    `
+  }
+}
+
+export function emailKorysAdded(userName: string, amount: number, reason: string) {
+  return {
+    subject: `🪙 +${amount} Korys crédités sur votre compte`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #3D2009; padding: 24px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #F5E6C8; margin: 0; font-size: 20px;">Talents d'Afrique</h1>
+        </div>
+        <div style="background: #FFFBF5; padding: 24px; border-radius: 0 0 12px 12px; border: 1px solid #E8D5B7;">
+          <h2 style="color: #3D2009;">Bonne nouvelle ${userName} !</h2>
+          <p style="color: #5C3D1E;">L'équipe vient de vous créditer <strong>${amount} Korys</strong>.</p>
+          ${reason ? `<p style="color: #5C3D1E;"><em>Motif : ${reason}</em></p>` : ''}
+          <a href="https://talentsdafrique.com/dashboard?tab=korys"
+             style="display: inline-block; background: #C8920A; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px;">
+            Voir mon solde →
+          </a>
+        </div>
+      </div>
+    `
+  }
+}
+
 export function emailReservationRefused(clientName: string, service: string) {
   return {
     subject: `Votre demande pour ${service}`,

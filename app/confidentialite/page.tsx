@@ -96,11 +96,11 @@ export default function ConfidentialitePage() {
               </p>
               <div className="bg-white rounded-xl border border-brown/10 p-4">
                 <p className="font-medium text-brown">Talents d&apos;Afrique</p>
-                <p>Site web : <a href="https://talentsdafrique.fr" className="text-primary hover:underline">talentsdafrique.fr</a></p>
+                <p>Site web : <a href="https://talentsdafrique.com" className="text-primary hover:underline">talentsdafrique.com</a></p>
                 <p>
                   Adresse e-mail :{' '}
-                  <a href="mailto:contact@talentsdafrique.fr" className="text-primary hover:underline">
-                    contact@talentsdafrique.fr
+                  <a href="mailto:contact@talentsdafrique.com" className="text-primary hover:underline">
+                    contact@talentsdafrique.com
                   </a>
                 </p>
               </div>
@@ -265,8 +265,8 @@ export default function ConfidentialitePage() {
               </ul>
               <p>
                 Pour exercer ces droits, contactez-nous à{' '}
-                <a href="mailto:contact@talentsdafrique.fr" className="text-primary hover:underline">
-                  contact@talentsdafrique.fr
+                <a href="mailto:contact@talentsdafrique.com" className="text-primary hover:underline">
+                  contact@talentsdafrique.com
                 </a>
                 . Nous nous engageons à répondre dans un délai d&apos;un mois.
               </p>
@@ -389,8 +389,8 @@ export default function ConfidentialitePage() {
               <p>
                 Pour toute question relative à cette politique ou à la protection de
                 vos données personnelles, contactez-nous :{' '}
-                <a href="mailto:contact@talentsdafrique.fr" className="text-primary hover:underline">
-                  contact@talentsdafrique.fr
+                <a href="mailto:contact@talentsdafrique.com" className="text-primary hover:underline">
+                  contact@talentsdafrique.com
                 </a>
               </p>
             </div>

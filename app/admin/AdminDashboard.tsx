@@ -457,23 +457,26 @@ function ModerationTab() {
   }, [])
 
   async function updateTalentStatus(userId: string, newStatus: ProfileStatus) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ status: newStatus })
-      .eq('id', userId)
-
-    if (!error) {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, status: newStatus }),
+    })
+    if (res.ok) {
       setTalentStatuses((prev) => ({ ...prev, [userId]: newStatus }))
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Erreur' }))
+      alert(err.error ?? 'Erreur lors de la mise à jour')
     }
   }
 
   async function resolveReport(reportId: string) {
-    const { error } = await supabase
-      .from('reports')
-      .update({ status: 'resolved' })
-      .eq('id', reportId)
-
-    if (!error) {
+    const res = await fetch('/api/admin/moderation', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: reportId, status: 'resolved' }),
+    })
+    if (res.ok) {
       setReportStatuses((prev) => ({ ...prev, [reportId]: 'resolved' }))
     }
   }
@@ -874,38 +877,38 @@ function KorysTab() {
     setSearchResults([])
   }
 
+  const [mode, setMode] = useState<'credit' | 'debit'>('credit')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
   async function handleCredit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedUser || !amount || !reason) return
 
     setCrediting(true)
+    setErrorMsg(null)
     try {
       const numAmount = parseInt(amount, 10)
-      const newBalance = (selectedUser.kory_balance ?? 0) + numAmount
+      const signed = mode === 'debit' ? -Math.abs(numAmount) : Math.abs(numAmount)
 
-      const [balanceRes, txRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .update({ kory_balance: newBalance })
-          .eq('id', selectedUser.id),
-        supabase.from('kory_transactions').insert({
-          user_id: selectedUser.id,
-          amount: numAmount,
-          reason,
-        }),
-      ])
+      const res = await fetch('/api/admin/korys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: selectedUser.id, amount: signed, reason }),
+      })
 
-      if (!balanceRes.error && !txRes.error) {
-        setCredited(true)
-        setSelectedUser(null)
-        setSearch('')
-        setAmount('')
-        setReason('')
-        await loadTransactions()
-        setTimeout(() => setCredited(false), 2500)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur' }))
+        setErrorMsg(err.error ?? 'Erreur lors de l\'opération')
+        return
       }
-    } catch {
-      // silent
+
+      setCredited(true)
+      setSelectedUser(null)
+      setSearch('')
+      setAmount('')
+      setReason('')
+      await loadTransactions()
+      setTimeout(() => setCredited(false), 2500)
     } finally {
       setCrediting(false)
     }
@@ -913,9 +916,27 @@ function KorysTab() {
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
-      {/* Credit form */}
+      {/* Credit/Debit form */}
       <div className="bg-white rounded-xl border border-brown/10 p-5 shadow-sm">
-        <h3 className="font-semibold text-brown mb-4">Créditer des Korys</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-brown">Créditer / Débiter des Korys</h3>
+          <div className="flex gap-1 bg-brown/5 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setMode('credit')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mode === 'credit' ? 'bg-green-100 text-green-700' : 'text-brown/50'}`}
+            >
+              + Créditer
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('debit')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mode === 'debit' ? 'bg-red-100 text-red-700' : 'text-brown/50'}`}
+            >
+              − Débiter
+            </button>
+          </div>
+        </div>
         <form onSubmit={handleCredit} className="flex flex-col gap-4">
           {/* Search with dropdown */}
           <div className="relative">
@@ -973,9 +994,14 @@ function KorysTab() {
               onChange={(e) => setReason(e.target.value)}
             />
           </div>
+          {errorMsg && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {errorMsg}
+            </p>
+          )}
           <Button
             type="submit"
-            variant="kory"
+            variant={mode === 'debit' ? 'secondary' : 'kory'}
             size="md"
             className="w-fit"
             disabled={!selectedUser || !amount || !reason || crediting}
@@ -983,12 +1009,12 @@ function KorysTab() {
             {crediting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Crédit en cours…
+                {mode === 'debit' ? 'Débit…' : 'Crédit…'}
               </>
             ) : credited ? (
-              'Korys crédités !'
+              mode === 'debit' ? 'Korys débités !' : 'Korys crédités !'
             ) : (
-              'Créditer les Korys'
+              mode === 'debit' ? 'Débiter les Korys' : 'Créditer les Korys'
             )}
           </Button>
         </form>
@@ -1055,38 +1081,40 @@ function KorysTab() {
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
+type ProfileWithEmail = Profile & { email: string | null }
+
 function UsersTab() {
-  const supabase = createClient()
   const [search, setSearch] = useState('')
-  const [users, setUsers] = useState<Profile[]>([])
+  const [users, setUsers] = useState<ProfileWithEmail[]>([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [boostLoading, setBoostLoading] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'all' | 'talents' | 'clients'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | ProfileStatus>('all')
+  const [messageUser, setMessageUser] = useState<ProfileWithEmail | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  async function loadUsers(query: string) {
+  async function loadUsers(query: string, f = filter, sf = statusFilter) {
     setLoading(true)
     try {
-      let req = supabase
-        .from('profiles')
-        .select('id, name, city, case_slug, status, is_talent, kory_balance, phone, whatsapp, trust_score, bio, created_at, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(20)
-
-      if (query.trim().length >= 2) {
-        req = req.ilike('name', `%${query.trim()}%`)
-      }
-
-      const { data } = await req
-      setUsers((data as Profile[]) ?? [])
+      const qs = new URLSearchParams()
+      if (query.trim().length >= 2) qs.set('search', query.trim())
+      if (f === 'talents') qs.set('is_talent', '1')
+      if (f === 'clients') qs.set('is_talent', '0')
+      if (sf !== 'all') qs.set('status', sf)
+      const res = await fetch(`/api/admin/users?${qs.toString()}`)
+      if (!res.ok) { setUsers([]); return }
+      const data = await res.json()
+      setUsers((data.users as ProfileWithEmail[]) ?? [])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadUsers('')
-  }, [])
+    loadUsers('', filter, statusFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, statusFilter])
 
   function handleSearch(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value
@@ -1096,31 +1124,66 @@ function UsersTab() {
   }
 
   async function updateStatus(userId: string, status: ProfileStatus) {
-    await supabase.from('profiles').update({ status }).eq('id', userId)
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status } : u))
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, status }),
+    })
+    if (res.ok) {
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status } : u))
+    } else {
+      const err = await res.json().catch(() => ({ error: 'Erreur' }))
+      alert(err.error ?? 'Erreur')
+    }
   }
 
   async function boostTrust(userId: string) {
     setBoostLoading(userId)
     const user = users.find((u) => u.id === userId)
     const newScore = Math.min((user?.trust_score ?? 0) + 0.5, 5)
-    await supabase.from('profiles').update({ trust_score: newScore }).eq('id', userId)
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, trust_score: newScore } : u))
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, trust_score: newScore }),
+    })
+    if (res.ok) {
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, trust_score: newScore } : u))
+    }
     setBoostLoading(null)
   }
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brown/40" />
-        <input
-          type="search"
-          placeholder="Rechercher un membre par nom…"
-          value={search}
-          onChange={handleSearch}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-brown/20 bg-white text-brown placeholder:text-brown/40 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
+      {/* Search + filters */}
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brown/40" />
+          <input
+            type="search"
+            placeholder="Rechercher un membre par nom…"
+            value={search}
+            onChange={handleSearch}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-brown/20 bg-white text-brown placeholder:text-brown/40 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-brown/50 mr-1">Type :</span>
+          {([['all', 'Tous'], ['talents', 'Talents'], ['clients', 'Clients']] as const).map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => setFilter(v)}
+              className={`px-3 py-1 text-xs font-medium rounded-lg border transition-colors ${filter === v ? 'bg-primary text-white border-primary' : 'bg-white text-brown/60 border-brown/15 hover:bg-brown/5'}`}
+            >{l}</button>
+          ))}
+          <span className="text-xs text-brown/50 ml-3 mr-1">Statut :</span>
+          {([['all', 'Tous'], ['observation', 'Observation'], ['parraine', 'Parrainés'], ['suspendu', 'Suspendus']] as const).map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => setStatusFilter(v)}
+              className={`px-3 py-1 text-xs font-medium rounded-lg border transition-colors ${statusFilter === v ? 'bg-primary text-white border-primary' : 'bg-white text-brown/60 border-brown/15 hover:bg-brown/5'}`}
+            >{l}</button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
@@ -1162,6 +1225,17 @@ function UsersTab() {
                 {expanded === u.id && (
                   <div className="px-5 pb-4 bg-brown/2 border-t border-brown/6">
                     <div className="pt-3 flex flex-col gap-3">
+                      {/* Email */}
+                      {u.email && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-brown/50">Email :</span>
+                          <a
+                            href={`mailto:${u.email}`}
+                            className="text-sm font-medium text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >{u.email}</a>
+                        </div>
+                      )}
                       {/* Contact */}
                       <div className="flex flex-wrap gap-2">
                         {u.phone && (
@@ -1246,12 +1320,112 @@ function UsersTab() {
                             Voir sa Case
                           </a>
                         )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMessageUser(u) }}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1.5 rounded-lg hover:bg-primary/20 transition-colors"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Envoyer un message
+                        </button>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {messageUser && (
+        <AdminMessageModal
+          user={messageUser}
+          onClose={() => setMessageUser(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Admin Message Modal ──────────────────────────────────────────────────────
+
+function AdminMessageModal({ user, onClose }: { user: ProfileWithEmail; onClose: () => void }) {
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    if (!subject.trim() || !message.trim()) return
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, subject, message }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error ?? 'Erreur')
+      }
+      setSent(true)
+      setTimeout(onClose, 1500)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold font-heading text-brown">Envoyer un message</h3>
+            <p className="text-xs text-brown/50 mt-0.5">À : {user.name} {user.email && <>— {user.email}</>}</p>
+          </div>
+        </div>
+
+        {sent ? (
+          <div className="text-center py-6">
+            <CircleCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
+            <p className="text-brown font-medium">Message envoyé !</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <input
+              type="text"
+              placeholder="Sujet"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-3 py-2.5 border border-brown/20 rounded-xl text-sm text-brown focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <textarea
+              placeholder="Votre message…"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={6}
+              className="w-full px-3 py-2.5 border border-brown/20 rounded-xl text-sm text-brown focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+            />
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-brown/60 hover:text-brown">
+                Annuler
+              </button>
+              <button
+                onClick={submit}
+                disabled={sending || !subject.trim() || !message.trim()}
+                className="inline-flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+              >
+                {sending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Envoyer
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1278,8 +1452,7 @@ function MessagesTab() {
 
   async function load() {
     try {
-      const { createClient: createSupabaseAdmin } = await import('@/lib/supabase/admin')
-      // Fetch directly via supabaseAdmin (client-side won't have service role, so use API)
+      // Fetch via API (service role lives server-side)
       const res = await fetch('/api/contact', { headers: { 'x-admin-secret': '' } })
       const data = await res.json()
       setMessages(data.messages ?? [])

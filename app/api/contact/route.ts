@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sendEmail, emailContactAdmin } from '@/lib/email'
 
 // POST /api/contact — submit a contact message (public, no auth required)
 export async function POST(request: NextRequest) {
@@ -26,6 +27,15 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('[api/contact POST]', error)
       return NextResponse.json({ error: 'Erreur lors de l\'envoi' }, { status: 500 })
+    }
+
+    // Notify admin by email (non-blocking)
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL || 'dany.dombou@gmail.com'
+      const { subject: s, html } = emailContactAdmin(name.trim(), email.trim(), subject?.trim() || '', message.trim())
+      await sendEmail(adminEmail, s, html)
+    } catch (e) {
+      console.error('[api/contact email admin]', e)
     }
 
     return NextResponse.json({ success: true })
