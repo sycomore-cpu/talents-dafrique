@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { Profile } from '@/lib/supabase/types'
 import TalentsGrid from './TalentsGrid'
+import { getReviewsAggregate, enrichWithAggregate } from '@/lib/reviews-aggregate'
 
 export const metadata: Metadata = {
   title: "Explorer les talents | Talents d'Afrique",
@@ -25,7 +26,9 @@ async function getAllTalents(): Promise<(Profile & { average_rating?: number })[
       .limit(200)
 
     if (error || !data) return []
-    return data as Profile[]
+    const profiles = data as Profile[]
+    const agg = await getReviewsAggregate(supabase, profiles.map((p) => p.id))
+    return enrichWithAggregate(profiles, agg)
   } catch {
     return []
   }

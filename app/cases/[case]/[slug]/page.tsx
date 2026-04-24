@@ -494,6 +494,11 @@ export default async function TalentProfilePage({
               )}
             </section>
 
+            {/* Report profile — visible mobile + desktop */}
+            <div className="flex justify-center pt-2 pb-4">
+              <ReportProfileButton reportedId={talent.id} />
+            </div>
+
           </div>
 
           {/* ── Desktop sidebar ── */}
@@ -543,11 +548,6 @@ export default async function TalentProfilePage({
                 Certaines réservations consomment des Korys, notre monnaie communautaire.
                 Recevez 10 Korys gratuits à l&apos;inscription.
               </p>
-            </div>
-
-            {/* Report profile */}
-            <div className="text-center pt-2">
-              <ReportProfileButton reportedId={talent.id} />
             </div>
 
             {/* Trust badge */}

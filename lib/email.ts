@@ -1,6 +1,8 @@
 import { Resend } from 'resend'
 
-const FROM = "Talents d'Afrique <noreply@talentsdafrique.com>"
+// FROM can be overridden with RESEND_FROM. If your domain is not yet verified
+// on Resend, set RESEND_FROM="onboarding@resend.dev" for testing.
+const FROM = process.env.RESEND_FROM || "Talents d'Afrique <noreply@talentsdafrique.com>"
 
 // Lazy singleton — never instantiated at module load time so the build
 // does not fail when RESEND_API_KEY is absent in the build environment.
@@ -12,14 +14,23 @@ function getResend(): Resend {
 
 export async function sendEmail(to: string, subject: string, html: string) {
   const key = process.env.RESEND_API_KEY
-  if (!key || key.startsWith('re_placeholder') || key === 're_123') {
-    console.log('[Email skipped — add RESEND_API_KEY]', { to, subject })
+  if (!key) {
+    console.warn('[Email skipped] RESEND_API_KEY not set', { to, subject })
+    return
+  }
+  if (key.startsWith('re_placeholder') || key === 're_123') {
+    console.warn('[Email skipped] RESEND_API_KEY is a placeholder — set a real key on Vercel', { to, subject })
     return
   }
   try {
-    await getResend().emails.send({ from: FROM, to, subject, html })
+    const res = await getResend().emails.send({ from: FROM, to, subject, html })
+    if ((res as { error?: unknown }).error) {
+      console.error('[Email API error]', (res as { error: unknown }).error, { to, subject, from: FROM })
+    } else {
+      console.log('[Email sent]', { to, subject })
+    }
   } catch (err) {
-    console.error('[Email error]', err)
+    console.error('[Email exception]', err, { to, subject, from: FROM })
   }
 }
 

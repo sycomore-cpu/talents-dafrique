@@ -85,6 +85,15 @@ body {
   background-color: #a67208;
 }
 
+/* Hide scrollbar utility — used for tab rows that scroll horizontally */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Séparateur Kente */
 .kente-divider {
   height: 4px;

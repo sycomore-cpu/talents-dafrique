@@ -1449,6 +1449,7 @@ function MessagesTab() {
   const [messages, setMessages] = useState<ContactMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [replyTarget, setReplyTarget] = useState<ContactMessage | null>(null)
 
   async function load() {
     try {
@@ -1539,18 +1540,101 @@ function MessagesTab() {
                       Marquer lu
                     </button>
                   )}
-                  <a
-                    href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject ?? 'Votre message sur Talents d\'Afrique')}`}
-                    className="text-xs text-green-700 hover:underline"
+                  <button
+                    onClick={() => setReplyTarget(m)}
+                    className="text-xs text-green-700 hover:underline text-left"
                   >
-                    Répondre
-                  </a>
+                    {m.status === 'replied' ? 'Répondre à nouveau' : 'Répondre'}
+                  </button>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {replyTarget && (
+        <ReplyContactModal
+          message={replyTarget}
+          onClose={() => setReplyTarget(null)}
+          onReplied={(id) => {
+            setMessages((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'replied' } : x)))
+            setReplyTarget(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ReplyContactModal({
+  message,
+  onClose,
+  onReplied,
+}: {
+  message: ContactMessage
+  onClose: () => void
+  onReplied: (id: string) => void
+}) {
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSend() {
+    if (!reply.trim()) return
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/contact/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: message.id, reply: reply.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      onReplied(message.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-brown mb-1">Répondre à {message.name}</h3>
+        <p className="text-xs text-brown/50 mb-4">{message.email} · {message.subject || '(sans sujet)'}</p>
+        <div className="bg-brown/5 rounded-lg p-3 mb-4 text-xs text-brown/70 max-h-32 overflow-y-auto whitespace-pre-wrap">
+          {message.message}
+        </div>
+        <textarea
+          value={reply}
+          onChange={(e) => setReply(e.target.value)}
+          placeholder="Votre réponse…"
+          rows={6}
+          className="w-full border border-brown/20 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          autoFocus
+        />
+        {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
+        <div className="flex gap-2 justify-end mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-brown/60 hover:text-brown"
+            disabled={sending}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={sending || !reply.trim()}
+            className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            {sending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Envoyer la réponse
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1587,28 +1671,29 @@ export default function AdminDashboard() {
               href="/"
               className="text-white/70 hover:text-white"
             >
-              ← Retour au site
+              <span className="hidden sm:inline">← Retour au site</span>
+              <span className="sm:hidden">←</span>
             </Button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex gap-0 -mb-px">
+        {/* Tabs — horizontal scroll on mobile */}
+        <div className="max-w-6xl mx-auto px-2 sm:px-4">
+          <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-hide whitespace-nowrap">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex items-center gap-1.5 shrink-0 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
                     activeTab === tab.key
                       ? 'border-kory text-white'
                       : 'border-transparent text-white/50 hover:text-white/80'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{tab.label}</span>
                 </button>
               )
             })}
@@ -1617,7 +1702,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'moderation' && <ModerationTab />}

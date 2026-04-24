@@ -8,6 +8,7 @@ import type { Profile } from '@/lib/supabase/types'
 import { TalentCard } from '@/components/talent/TalentCard'
 import { FilterBar } from '@/components/cases/FilterBar'
 import { createClient } from '@/lib/supabase/server'
+import { getReviewsAggregate, enrichWithAggregate } from '@/lib/reviews-aggregate'
 
 // ─── ISR revalidation ─────────────────────────────────────────────────────────
 
@@ -1237,7 +1238,9 @@ export default async function CasePage({
     .neq('status', 'suspendu')
     .order('trust_score', { ascending: false })
 
-  const talents: Profile[] = (talentsData ?? []) as unknown as Profile[]
+  const baseProfiles: Profile[] = (talentsData ?? []) as unknown as Profile[]
+  const agg = await getReviewsAggregate(supabase, baseProfiles.map((p) => p.id))
+  const talents = enrichWithAggregate(baseProfiles, agg) as unknown as Profile[]
 
   return (
     <div className="min-h-screen bg-cream">

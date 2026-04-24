@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
   if (search.length >= 2) q = q.ilike('name', `%${search}%`)
   if (isTalent === '1') q = q.eq('is_talent', true)
   if (isTalent === '0') q = q.eq('is_talent', false)
-  if (status) q = q.eq('status', status)
+  if (status) {
+    q = q.eq('status', status)
+  } else {
+    // Hide suspended users by default — only show when explicitly filtered
+    q = q.neq('status', 'suspendu')
+  }
   if (caseSlug) q = q.eq('case_slug', caseSlug)
 
   const { data: profiles, error } = await q
